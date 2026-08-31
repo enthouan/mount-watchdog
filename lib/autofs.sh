@@ -37,6 +37,7 @@ mw_autofs_array_contains() {
 
 mw_validate_auto_master() {
   mw_master_file=$1
+  MW_AUTO_MASTER_HOOK_MISSING=0
   [ -f "$mw_master_file" ] && [ ! -L "$mw_master_file" ] || {
     mw_autofs_error 'auto_master is missing, not regular, or a symlink'
     return 1
@@ -148,6 +149,7 @@ mw_validate_auto_master() {
   done < "$mw_master_file"
 
   [ "$mw_master_smb_count" -eq 1 ] || {
+    [ "$mw_master_smb_count" -ne 0 ] || MW_AUTO_MASTER_HOOK_MISSING=1
     mw_autofs_error 'auto_master must contain exactly one active /- auto_smb entry'
     return 1
   }
@@ -351,4 +353,58 @@ mw_parse_auto_smb() {
     mw_autofs_error 'auto_smb contains no supported mappings'
     return 1
   }
+}
+
+# Validate the installed selection against the supported, effective file-map
+# hookup before the runtime may probe or recover anything. Directory Service
+# expansion through +auto_master is deliberately not treated as an alternative
+# source here; that migration needs separate native validation before support.
+# shellcheck disable=SC2034 # MW_AUTOFS_DRIFT_REASON is consumed by the sourcing runtime.
+mw_validate_runtime_autofs_configuration() {
+  MW_AUTOFS_DRIFT_REASON=autofs-master-map-invalid
+
+  if ! mw_regular_file_is_trusted "$MW_AUTO_MASTER_FILE" ||
+    ! mw_file_has_single_link "$MW_AUTO_MASTER_FILE"; then
+    return 1
+  fi
+  if ! mw_validate_auto_master "$MW_AUTO_MASTER_FILE"; then
+    if [ "${MW_AUTO_MASTER_HOOK_MISSING:-0}" -eq 1 ]; then
+      MW_AUTOFS_DRIFT_REASON=autofs-hook-missing
+    fi
+    return 1
+  fi
+
+  if [ ! -e "$MW_AUTO_SMB_FILE" ] && [ ! -L "$MW_AUTO_SMB_FILE" ]; then
+    MW_AUTOFS_DRIFT_REASON=autofs-selected-map-missing
+    return 1
+  fi
+  MW_AUTOFS_DRIFT_REASON=autofs-selected-map-invalid
+  if ! mw_regular_file_is_trusted "$MW_AUTO_SMB_FILE" ||
+    ! mw_file_has_single_link "$MW_AUTO_SMB_FILE" ||
+    ! mw_parse_auto_smb "$MW_AUTO_SMB_FILE" "$MW_CONFIG_LOCAL_USER" ||
+    ! mw_validate_auto_master_selected_paths "${MW_MOUNT_PATHS[@]}"; then
+    return 1
+  fi
+
+  mw_runtime_selected_index=0
+  while [ "$mw_runtime_selected_index" -lt "${#MW_MOUNT_NAMES[@]}" ]; do
+    mw_runtime_map_match=0
+    mw_runtime_map_index=0
+    while [ "$mw_runtime_map_index" -lt "${#MW_AUTO_NAMES[@]}" ]; do
+      if [ "${MW_AUTO_NAMES[$mw_runtime_map_index]}" = "${MW_MOUNT_NAMES[$mw_runtime_selected_index]}" ] &&
+        [ "${MW_AUTO_PATHS[$mw_runtime_map_index]}" = "${MW_MOUNT_PATHS[$mw_runtime_selected_index]}" ] &&
+        [ "${MW_AUTO_HOSTS[$mw_runtime_map_index]}" = "${MW_MOUNT_HOSTS[$mw_runtime_selected_index]}" ] &&
+        [ "${MW_AUTO_SHARES[$mw_runtime_map_index]}" = "${MW_MOUNT_SHARES[$mw_runtime_selected_index]}" ]; then
+        mw_runtime_map_match=$((mw_runtime_map_match + 1))
+      fi
+      mw_runtime_map_index=$((mw_runtime_map_index + 1))
+    done
+    if [ "$mw_runtime_map_match" -ne 1 ]; then
+      MW_AUTOFS_DRIFT_REASON=autofs-selected-mapping-mismatch
+      return 1
+    fi
+    mw_runtime_selected_index=$((mw_runtime_selected_index + 1))
+  done
+
+  return 0
 }

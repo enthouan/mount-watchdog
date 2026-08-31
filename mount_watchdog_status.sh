@@ -13,6 +13,7 @@ case "$0" in /*) mw_entry_path=$0 ;; *) mw_entry_path=$PWD/$0 ;; esac
 mw_script_dir=${mw_entry_path%/*}
 mw_common_file=$mw_script_dir/lib/common.sh
 mw_runtime_file=$mw_script_dir/lib/runtime.sh
+mw_autofs_file=$mw_script_dir/lib/autofs.sh
 mw_test_requested=0
 [ -z "${MW_TEST_ROOT:-}${MW_TEST_COMMAND_DIR:-}" ] || mw_test_requested=1
 mw_watchdog_file=$mw_script_dir/watchdog.sh
@@ -33,7 +34,7 @@ if [ "$mw_test_requested" -eq 0 ]; then
     [ $(( (10#$mw_trusted_mode / 10) % 10 & 2 )) -eq 0 ] || exit 3
     [ $(( 10#$mw_trusted_mode % 10 & 2 )) -eq 0 ] || exit 3
   done
-  for mw_trusted_path in "$mw_entry_path" "$mw_watchdog_file" "$mw_common_file" "$mw_runtime_file" \
+  for mw_trusted_path in "$mw_entry_path" "$mw_watchdog_file" "$mw_common_file" "$mw_runtime_file" "$mw_autofs_file" \
     "$mw_script_dir/defaults.conf" "$mw_script_dir/mounts.conf" "$mw_script_dir/VERSION"; do
     [ -f "$mw_trusted_path" ] && [ ! -L "$mw_trusted_path" ] || exit 3
     mw_trusted_meta=$(/usr/bin/stat -f '%Su|%Lp' "$mw_trusted_path" 2>/dev/null) || exit 3
@@ -52,11 +53,17 @@ fi
   printf 'MountWatchdog: missing trusted runtime library\n' >&2
   exit 3
 }
+[ -f "$mw_autofs_file" ] && [ ! -L "$mw_autofs_file" ] || {
+  printf 'MountWatchdog: missing trusted autofs library\n' >&2
+  exit 3
+}
 . "$mw_common_file"
 . "$mw_runtime_file"
+. "$mw_autofs_file"
 MW_RUNTIME_PROGRAM_FILE=$mw_watchdog_file
 MW_RUNTIME_COMMON_FILE=$mw_common_file
 MW_RUNTIME_LIBRARY_FILE=$mw_runtime_file
+MW_RUNTIME_AUTOFS_FILE=$mw_autofs_file
 
 case "${1:-}" in
   ''|--status) ;;
@@ -113,7 +120,7 @@ if [ -f "$mw_heartbeat" ] && [ ! -L "$mw_heartbeat" ] &&
   case "$mw_heartbeat_phase:$mw_heartbeat_result" in
     running:in-progress|complete:ok) mw_heartbeat_result_severity=0 ;;
     complete:pending|complete:interrupted) mw_heartbeat_result_severity=1 ;;
-    complete:manual-attention|complete:interrupted-command-blocked|complete:blocked-command-unsafe-block-record|complete:blocked-command-invalid-block-record|complete:blocked-command-invalid-block-identifiers|complete:blocked-command-surviving-descendant-group|complete:blocked-command-live-unverifiable-command-group|complete:blocked-command-live-command-group|complete:blocked-command-live-command-group-token-mismatch|complete:blocked-command-block-record-retire-failed) mw_heartbeat_result_severity=2 ;;
+    complete:configuration-drift|complete:manual-attention|complete:interrupted-command-blocked|complete:blocked-command-unsafe-block-record|complete:blocked-command-invalid-block-record|complete:blocked-command-invalid-block-identifiers|complete:blocked-command-surviving-descendant-group|complete:blocked-command-live-unverifiable-command-group|complete:blocked-command-live-command-group|complete:blocked-command-live-command-group-token-mismatch|complete:blocked-command-block-record-retire-failed) mw_heartbeat_result_severity=2 ;;
     complete:inspection-error|complete:state-write-error|complete:clock-error|complete:internal-error|complete:unsafe-mount-state-directory-*|complete:unsafe-state-leaf-*) mw_heartbeat_result_severity=3 ;;
     *) mw_heartbeat_result_valid=0 ;;
   esac
@@ -249,7 +256,7 @@ while [ "$mw_index" -lt "${#MW_MOUNT_NAMES[@]}" ]; do
     *) mw_status_core_valid=0 ;;
   esac
   case "$mw_action" in
-    idle|deferred-cooldown|deferred-network|deferred-command-block|unmount-required|refresh-required|manual-attention|canceled) ;;
+    idle|deferred-cooldown|deferred-network|deferred-command-block|unmount-required|refresh-required|configuration-drift|manual-attention|canceled) ;;
     *) mw_status_core_valid=0 ;;
   esac
   if [ "$mw_status_core_valid" -ne 1 ]; then
@@ -344,6 +351,7 @@ while [ "$mw_index" -lt "${#MW_MOUNT_NAMES[@]}" ]; do
     attempting:1|complete:1) printf 'durable_unmount_refresh=required\n' ;;
   esac
   case "$mw_action" in
+    configuration-drift) [ "$mw_status_exit" -eq 3 ] || mw_status_exit=2 ;;
     manual-attention) [ "$mw_status_exit" -eq 3 ] || mw_status_exit=2 ;;
     deferred-*|unmount-required|refresh-required) [ "$mw_status_exit" -ne 0 ] || mw_status_exit=1 ;;
   esac

@@ -14,6 +14,7 @@ case "$0" in /*) mw_entry_path=$0 ;; *) mw_entry_path=$PWD/$0 ;; esac
 mw_script_dir=${mw_entry_path%/*}
 mw_common_file=$mw_script_dir/lib/common.sh
 mw_runtime_file=$mw_script_dir/lib/runtime.sh
+mw_autofs_file=$mw_script_dir/lib/autofs.sh
 
 mw_test_requested=0
 [ -z "${MW_TEST_ROOT:-}${MW_TEST_COMMAND_DIR:-}" ] || mw_test_requested=1
@@ -37,7 +38,7 @@ if [ "$mw_test_requested" -eq 0 ]; then
     [ $(( (10#$mw_trusted_mode / 10) % 10 & 2 )) -eq 0 ] || exit 70
     [ $(( 10#$mw_trusted_mode % 10 & 2 )) -eq 0 ] || exit 70
   done
-  for mw_trusted_path in "$mw_entry_path" "$mw_common_file" "$mw_runtime_file" \
+  for mw_trusted_path in "$mw_entry_path" "$mw_common_file" "$mw_runtime_file" "$mw_autofs_file" \
     "$mw_script_dir/defaults.conf" "$mw_script_dir/mounts.conf" "$mw_script_dir/VERSION"; do
     [ -f "$mw_trusted_path" ] && [ ! -L "$mw_trusted_path" ] || exit 70
     mw_trusted_meta=$(/usr/bin/stat -f '%Su|%Lp' "$mw_trusted_path" 2>/dev/null) || exit 70
@@ -56,11 +57,17 @@ fi
   printf 'MountWatchdog: missing trusted runtime library\n' >&2
   exit 70
 }
+[ -f "$mw_autofs_file" ] && [ ! -L "$mw_autofs_file" ] || {
+  printf 'MountWatchdog: missing trusted autofs library\n' >&2
+  exit 70
+}
 . "$mw_common_file"
 . "$mw_runtime_file"
+. "$mw_autofs_file"
 MW_RUNTIME_PROGRAM_FILE=$mw_entry_path
 MW_RUNTIME_COMMON_FILE=$mw_common_file
 MW_RUNTIME_LIBRARY_FILE=$mw_runtime_file
+MW_RUNTIME_AUTOFS_FILE=$mw_autofs_file
 
 [ "$#" -eq 0 ] || {
   mw_error 'the periodic runtime accepts no arguments; use the separate status command'
@@ -205,10 +212,93 @@ mw_normalize_previous_for_tick() {
   fi
 }
 
+MW_OBS=()
+MW_NET=()
+MW_LAST_NET=()
+MW_INITIALIZED=()
+MW_PENDING=()
+MW_PENDING_SINCE=()
+MW_ACTION=()
+MW_LAST_ATTEMPT=()
+MW_LAST_ATTEMPT_ACTION=()
+MW_LAST_ATTEMPT_RESULT=()
+MW_LAST_ATTEMPT_EXIT_STATUS=()
+MW_LAST_SUCCESS=()
+MW_LAST_SUCCESS_ACTION=()
+MW_LAST_ERROR=()
+MW_BLOCKED_PID=()
+MW_WANT_UNMOUNT=()
+MW_WANT_REFRESH=()
+MW_DID_UNMOUNT=()
+MW_CONTINUE_REFRESH=()
+MW_PREV_SUMMARIES=()
+
+mw_block_actions_for_configuration_drift() {
+  mw_drift_reason=$1
+  mw_drift_index=0
+  while [ "$mw_drift_index" -lt "${#MW_MOUNT_NAMES[@]}" ]; do
+    MW_ACTION[$mw_drift_index]=configuration-drift
+    MW_LAST_ERROR[$mw_drift_index]=$mw_drift_reason
+    MW_BLOCKED_PID[$mw_drift_index]=none
+    MW_WANT_UNMOUNT[$mw_drift_index]=0
+    MW_WANT_REFRESH[$mw_drift_index]=0
+    mw_drift_index=$((mw_drift_index + 1))
+  done
+  mw_log_global_event inspection autofs-configuration "$mw_drift_reason" configuration-drift
+}
+
+mw_commit_initial_configuration_drift() {
+  mw_initial_drift_reason=$1
+  mw_initial_drift_write_failed=0
+  mw_initial_drift_index=0
+  while [ "$mw_initial_drift_index" -lt "${#MW_MOUNT_NAMES[@]}" ]; do
+    mw_load_mount_state "$MW_STATE_DIR/${MW_MOUNT_NAMES[$mw_initial_drift_index]}/status"
+    mw_normalize_previous_for_tick
+    if ! mw_apply_unmount_attempt_journal "$MW_STATE_DIR/${MW_MOUNT_NAMES[$mw_initial_drift_index]}"; then
+      MW_STATE_VALID=0
+    fi
+    MW_PREV_SUMMARIES[$mw_initial_drift_index]=$MW_PREV_SUMMARY
+    MW_OBS[$mw_initial_drift_index]=inspection-error
+    MW_NET[$mw_initial_drift_index]=unknown
+    MW_LAST_NET[$mw_initial_drift_index]=$MW_PREV_NETWORK
+    MW_INITIALIZED[$mw_initial_drift_index]=$MW_PREV_INITIALIZED
+    MW_PENDING[$mw_initial_drift_index]=$MW_PREV_PENDING
+    MW_PENDING_SINCE[$mw_initial_drift_index]=$MW_PREV_PENDING_SINCE
+    MW_ACTION[$mw_initial_drift_index]=configuration-drift
+    MW_LAST_ATTEMPT[$mw_initial_drift_index]=$MW_PREV_LAST_ATTEMPT
+    MW_LAST_ATTEMPT_ACTION[$mw_initial_drift_index]=$MW_PREV_LAST_ATTEMPT_ACTION
+    MW_LAST_ATTEMPT_RESULT[$mw_initial_drift_index]=$MW_PREV_LAST_ATTEMPT_RESULT
+    MW_LAST_ATTEMPT_EXIT_STATUS[$mw_initial_drift_index]=$MW_PREV_LAST_ATTEMPT_EXIT_STATUS
+    MW_LAST_SUCCESS[$mw_initial_drift_index]=$MW_PREV_LAST_SUCCESS
+    MW_LAST_SUCCESS_ACTION[$mw_initial_drift_index]=$MW_PREV_LAST_SUCCESS_ACTION
+    MW_LAST_ERROR[$mw_initial_drift_index]=$mw_initial_drift_reason
+    MW_BLOCKED_PID[$mw_initial_drift_index]=none
+    MW_WANT_UNMOUNT[$mw_initial_drift_index]=0
+    MW_WANT_REFRESH[$mw_initial_drift_index]=0
+    MW_DID_UNMOUNT[$mw_initial_drift_index]=$MW_PREV_UNMOUNT_CONFIRMED
+    MW_CONTINUE_REFRESH[$mw_initial_drift_index]=$MW_PREV_UNMOUNT_REFRESH_REQUIRED
+    mw_write_mount_status_index "$mw_initial_drift_index" || mw_initial_drift_write_failed=1
+    mw_initial_drift_index=$((mw_initial_drift_index + 1))
+  done
+  mw_log_global_event inspection autofs-configuration "$mw_initial_drift_reason" configuration-drift
+  MW_TICK_COMPLETED_EPOCH=$MW_NOW_EPOCH
+  if [ "$mw_initial_drift_write_failed" -eq 1 ]; then
+    mw_write_terminal_heartbeat state-write-error || true
+    return 70
+  fi
+  mw_write_terminal_heartbeat configuration-drift || return 70
+  return 2
+}
+
 if mw_global_block_is_active; then
   MW_TICK_COMPLETED_EPOCH=$MW_NOW_EPOCH
   mw_write_terminal_heartbeat "blocked-command-$MW_GLOBAL_BLOCK_REASON" || true
   exit 2
+fi
+
+if ! mw_validate_runtime_autofs_configuration; then
+  mw_commit_initial_configuration_drift "$MW_AUTOFS_DRIFT_REASON"
+  exit $?
 fi
 
 mw_global_refresh_file=$MW_STATE_DIR/autofs-refresh
@@ -242,27 +332,6 @@ mw_global_refresh_eligible=1
 if [ $((MW_NOW_EPOCH - mw_global_last_refresh)) -lt "$MW_RECOVERY_COOLDOWN_SECONDS" ]; then
   mw_global_refresh_eligible=0
 fi
-
-MW_OBS=()
-MW_NET=()
-MW_LAST_NET=()
-MW_INITIALIZED=()
-MW_PENDING=()
-MW_PENDING_SINCE=()
-MW_ACTION=()
-MW_LAST_ATTEMPT=()
-MW_LAST_ATTEMPT_ACTION=()
-MW_LAST_ATTEMPT_RESULT=()
-MW_LAST_ATTEMPT_EXIT_STATUS=()
-MW_LAST_SUCCESS=()
-MW_LAST_SUCCESS_ACTION=()
-MW_LAST_ERROR=()
-MW_BLOCKED_PID=()
-MW_WANT_UNMOUNT=()
-MW_WANT_REFRESH=()
-MW_DID_UNMOUNT=()
-MW_CONTINUE_REFRESH=()
-MW_PREV_SUMMARIES=()
 
 mw_make_temp "$MW_STATE_DIR" .mount-snapshot || exit 70
 mw_snapshot=$MW_TEMP_PATH
@@ -618,6 +687,12 @@ while [ "$mw_index" -lt "${#MW_MOUNT_NAMES[@]}" ]; do
       ;;
   esac
 
+  if ! mw_validate_runtime_autofs_configuration; then
+    mw_block_actions_for_configuration_drift "$MW_AUTOFS_DRIFT_REASON"
+    mw_action_blocked=1
+    break
+  fi
+
   mw_make_temp "$MW_STATE_DIR" .umount-out || exit 70
   mw_cmd_out=$MW_TEMP_PATH
   mw_make_temp "$MW_STATE_DIR" .umount-err || exit 70
@@ -726,6 +801,13 @@ while [ "$mw_index" -lt "${#MW_MOUNT_NAMES[@]}" ]; do
   [ "${MW_WANT_REFRESH[$mw_index]}" -ne 1 ] || mw_refresh_requested=1
   mw_index=$((mw_index + 1))
 done
+
+if [ "$mw_refresh_requested" -eq 1 ] && [ "$mw_action_blocked" -eq 0 ]; then
+  if ! mw_validate_runtime_autofs_configuration; then
+    mw_block_actions_for_configuration_drift "$MW_AUTOFS_DRIFT_REASON"
+    mw_action_blocked=1
+  fi
+fi
 
 if [ "$mw_refresh_requested" -eq 1 ] && [ "$mw_action_blocked" -eq 0 ]; then
   mw_atomic_write_lines "$mw_global_refresh_file" \
@@ -863,6 +945,12 @@ while [ "$mw_index" -lt "${#MW_MOUNT_NAMES[@]}" ]; do
       "${MW_LAST_ATTEMPT[$mw_index]}" || true
   fi
   case "${MW_ACTION[$mw_index]}" in
+    configuration-drift)
+      if [ "$mw_exit" -ne 70 ]; then
+        mw_exit=2
+        mw_result=configuration-drift
+      fi
+      ;;
     manual-attention)
       if [ "$mw_exit" -ne 70 ]; then
         mw_exit=2

@@ -31,6 +31,9 @@ mw_output=$MW_TEST_ROOT/mount.output
 [ ! -f "$MW_TEST_ROOT/mount.output.$mw_call_count" ] || mw_output=$MW_TEST_ROOT/mount.output.$mw_call_count
 [ ! -f "$mw_output" ] || /bin/cat "$mw_output"
 [ ! -f "$MW_TEST_ROOT/mount.stderr" ] || /bin/cat "$MW_TEST_ROOT/mount.stderr" >&2
+if [ -f "$MW_TEST_ROOT/auto_master.after_mount.$mw_call_count" ]; then
+  /bin/cp "$MW_TEST_ROOT/auto_master.after_mount.$mw_call_count" "$MW_TEST_ROOT/etc/auto_master" || exit 98
+fi
 if [ -f "$MW_TEST_ROOT/mount.kill-supervisor-after-output" ]; then
   printf '%s\n' "$$" > "$MW_TEST_ROOT/mount-kill.pid"
   : > "$MW_TEST_ROOT/mount-kill-ready"
