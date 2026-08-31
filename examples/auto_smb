@@ -1,0 +1,3 @@
+# Fictional TEST-NET hosts only. There are no credentials in this example.
+/Users/testuser/Archive -fstype=smb,soft,noowners,nosuid ://192.0.2.10/Archive
+/Users/testuser/Studio -fstype=smbfs,soft,noowners,nosuid ://198.51.100.20/Workspace

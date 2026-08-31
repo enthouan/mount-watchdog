@@ -1,0 +1,4 @@
+#!/bin/bash
+mw_ps_token=test-process-token
+[ ! -f "$MW_TEST_ROOT/ps.token" ] || IFS= read -r mw_ps_token < "$MW_TEST_ROOT/ps.token"
+printf '%s\n' "$mw_ps_token"

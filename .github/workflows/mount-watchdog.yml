@@ -1,0 +1,41 @@
+name: MountWatchdog checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  non-destructive:
+    name: Bash 3.2 fixture checks
+    runs-on: macos-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Report fixture environment
+        shell: /bin/bash --noprofile --norc -eo pipefail {0}
+        run: |
+          /usr/bin/sw_vers
+          /bin/bash --version
+
+      - name: Require Apple system Bash 3.2
+        shell: /bin/bash --noprofile --norc -eo pipefail {0}
+        run: |
+          bash_version=$(/bin/bash -c 'printf "%s.%s" "${BASH_VERSINFO[0]}" "${BASH_VERSINFO[1]}"')
+          if [ "$bash_version" != "3.2" ]; then
+            printf 'Expected /bin/bash 3.2 on the macOS runner, found %s\n' "$bash_version" >&2
+            exit 1
+          fi
+
+      - name: Syntax-check shell files
+        shell: /bin/bash --noprofile --norc -eo pipefail {0}
+        run: find . -type f -name "*.sh" ! -path "./.git/*" -exec /bin/bash -n {} \;
+
+      - name: Run fixture tests
+        shell: /bin/bash --noprofile --norc -eo pipefail {0}
+        run: /bin/bash tests/run.sh

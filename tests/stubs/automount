@@ -1,0 +1,8 @@
+#!/bin/bash
+printf 'automount|%s\n' "$*" >> "$MW_TEST_ROOT/actions.log"
+mw_result=0
+[ ! -f "$MW_TEST_ROOT/automount.exit" ] || IFS= read -r mw_result < "$MW_TEST_ROOT/automount.exit"
+if [ "$mw_result" -eq 0 ] && [ -f "$MW_TEST_ROOT/mount.after_automount" ]; then
+  /bin/cp "$MW_TEST_ROOT/mount.after_automount" "$MW_TEST_ROOT/mount.output"
+fi
+exit "$mw_result"

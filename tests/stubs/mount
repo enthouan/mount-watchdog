@@ -1,0 +1,40 @@
+#!/bin/bash
+printf 'mount\n' >> "$MW_TEST_ROOT/actions.log"
+if [ -f "$MW_TEST_ROOT/reject-listed-runtime-orphans" ] &&
+  [ -f "$MW_TEST_ROOT/runtime-orphan-paths" ]; then
+  while IFS= read -r mw_orphan_path || [ -n "$mw_orphan_path" ]; do
+    if [ -e "$mw_orphan_path" ] || [ -L "$mw_orphan_path" ]; then
+      printf 'mount-observed-orphan|%s\n' "${mw_orphan_path##*/}" >> "$MW_TEST_ROOT/actions.log"
+      exit 97
+    fi
+  done < "$MW_TEST_ROOT/runtime-orphan-paths"
+fi
+if [ -f "$MW_TEST_ROOT/mount.spawn-timeout" ]; then
+  printf '%s\n' "$$" > "$MW_TEST_ROOT/mount-command.pid"
+  /bin/sleep 60 &
+  mw_mount_child=$!
+  printf '%s\n' "$mw_mount_child" > "$MW_TEST_ROOT/mount-child.pid"
+  wait "$mw_mount_child"
+  exit $?
+fi
+mw_call_count=0
+if [ -f "$MW_TEST_ROOT/mount.calls" ]; then
+  IFS= read -r mw_call_count < "$MW_TEST_ROOT/mount.calls"
+  case "$mw_call_count" in ''|*[!0-9]*) mw_call_count=0 ;; esac
+fi
+mw_call_count=$((mw_call_count + 1))
+printf '%s\n' "$mw_call_count" > "$MW_TEST_ROOT/mount.calls"
+mw_exit=0
+[ ! -f "$MW_TEST_ROOT/mount.exit" ] || IFS= read -r mw_exit < "$MW_TEST_ROOT/mount.exit"
+[ ! -f "$MW_TEST_ROOT/mount.exit.$mw_call_count" ] || IFS= read -r mw_exit < "$MW_TEST_ROOT/mount.exit.$mw_call_count"
+mw_output=$MW_TEST_ROOT/mount.output
+[ ! -f "$MW_TEST_ROOT/mount.output.$mw_call_count" ] || mw_output=$MW_TEST_ROOT/mount.output.$mw_call_count
+[ ! -f "$mw_output" ] || /bin/cat "$mw_output"
+[ ! -f "$MW_TEST_ROOT/mount.stderr" ] || /bin/cat "$MW_TEST_ROOT/mount.stderr" >&2
+if [ -f "$MW_TEST_ROOT/mount.kill-supervisor-after-output" ]; then
+  printf '%s\n' "$$" > "$MW_TEST_ROOT/mount-kill.pid"
+  : > "$MW_TEST_ROOT/mount-kill-ready"
+  kill -KILL "$PPID"
+  exit 1
+fi
+exit "$mw_exit"

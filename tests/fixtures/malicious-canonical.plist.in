@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.antoinemenard.mount-watchdog</string>
+  <key>Program</key>
+  <string>/tmp/not-allowlisted</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Library/Application Support/MountWatchdog/watchdog.sh</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StartInterval</key>
+  <integer>@INTERVAL_SECONDS@</integer>
+  <key>WorkingDirectory</key>
+  <string>/</string>
+  <key>StandardOutPath</key>
+  <string>/var/log/mount-watchdog.log</string>
+  <key>StandardErrorPath</key>
+  <string>/var/log/mount-watchdog.log</string>
+</dict>
+</plist>

@@ -1,0 +1,13 @@
+#!/bin/bash
+printf 'umount|%s\n' "$1" >> "$MW_TEST_ROOT/actions.log"
+if [ -f "$MW_TEST_ROOT/umount.kill-supervisor" ]; then
+  kill -KILL "$PPID"
+  exit 1
+fi
+[ ! -f "$MW_TEST_ROOT/umount.stderr" ] || /bin/cat "$MW_TEST_ROOT/umount.stderr" >&2
+mw_result=0
+[ ! -f "$MW_TEST_ROOT/umount.exit" ] || IFS= read -r mw_result < "$MW_TEST_ROOT/umount.exit"
+if [ "$mw_result" -eq 0 ] && [ -f "$MW_TEST_ROOT/mount.after_umount" ]; then
+  /bin/cp "$MW_TEST_ROOT/mount.after_umount" "$MW_TEST_ROOT/mount.output"
+fi
+exit "$mw_result"

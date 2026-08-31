@@ -1,0 +1,16 @@
+#!/bin/bash
+mw_previous=
+mw_last=
+for mw_arg in "$@"; do mw_previous=$mw_last; mw_last=$mw_arg; done
+mw_host=$mw_previous
+printf 'nc|%s|%s\n' "$mw_host" "$mw_last" >> "$MW_TEST_ROOT/actions.log"
+mw_result=unreachable
+[ ! -f "$MW_TEST_ROOT/network/$mw_host" ] || IFS= read -r mw_result < "$MW_TEST_ROOT/network/$mw_host"
+[ "$mw_result" != spawn-timeout ] || {
+  /bin/sleep 60 &
+  mw_child=$!
+  printf '%s\n' "$mw_child" > "$MW_TEST_ROOT/timeout-child.pid"
+  wait "$mw_child"
+  exit $?
+}
+[ "$mw_result" = reachable ]

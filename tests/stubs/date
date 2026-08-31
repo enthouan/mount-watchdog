@@ -1,0 +1,7 @@
+#!/bin/bash
+mw_now=1000
+[ ! -f "$MW_TEST_ROOT/now" ] || IFS= read -r mw_now < "$MW_TEST_ROOT/now"
+case "$*" in
+  *+%s*) printf '%s\n' "$mw_now" ;;
+  *) printf '2026-08-30T00:00:00Z\n' ;;
+esac

@@ -1,0 +1,5 @@
+#!/bin/bash
+printf 'launchctl|%s\n' "$*" >> "$MW_TEST_ROOT/actions.log"
+mw_result=0
+[ ! -f "$MW_TEST_ROOT/launchctl.exit" ] || IFS= read -r mw_result < "$MW_TEST_ROOT/launchctl.exit"
+exit "$mw_result"
