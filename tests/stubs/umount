@@ -1,6 +1,26 @@
 #!/bin/bash
 printf 'umount|%s\n' "$1" >> "$MW_TEST_ROOT/actions.log"
 if [ -f "$MW_TEST_ROOT/umount.kill-supervisor" ]; then
+  # Exercise a post-fork crash only after the durable guard has real identifiers.
+  mw_guard=$MW_TEST_ROOT/state/.tick.lock/command-guard
+  mw_guard_wait=0
+  mw_guard_ready=0
+  while [ "$mw_guard_wait" -lt 50 ]; do
+    if [ -f "$mw_guard" ] &&
+      /usr/bin/grep -Fqx 'active|1' "$mw_guard" &&
+      /usr/bin/grep -Fqx "pid|$$" "$mw_guard" &&
+      /usr/bin/grep -Fqx "pgid|$$" "$mw_guard" &&
+      /usr/bin/grep -Fqx 'command|umount' "$mw_guard"; then
+      mw_guard_ready=1
+      break
+    fi
+    /bin/sleep 0.1
+    mw_guard_wait=$((mw_guard_wait + 1))
+  done
+  if [ "$mw_guard_ready" -ne 1 ]; then
+    printf 'umount stub did not observe a finalized command guard\n' >&2
+    exit 125
+  fi
   kill -KILL "$PPID"
   exit 1
 fi
