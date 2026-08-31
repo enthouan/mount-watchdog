@@ -7,6 +7,48 @@ mw_error() {
   printf 'MountWatchdog: %s\n' "$*" >&2
 }
 
+# macOS ACL policy for privileged path validation. Source ancestors may carry
+# canonical deny-only entries (the standard home-directory deny-delete entry is
+# one example), because those entries can only reduce access. Any allow entry,
+# noncanonical ACL, or unparseable ACL output is rejected. Managed nodes use the
+# stricter "none" policy and must have no ACL entries at all.
+mw_acl_policy_is_safe() {
+  mw_acl_path=$1
+  mw_acl_policy=$2
+  case "$mw_acl_policy" in deny-only|none) ;; *) return 1 ;; esac
+  case "$mw_acl_path" in *'
+'*) return 1 ;; esac
+  [ -e "$mw_acl_path" ] && [ ! -L "$mw_acl_path" ] || return 1
+  # Darwin chmod -C succeeds when an ACL is non-canonical and returns false
+  # for a canonical ACL (and for no ACL), despite the terse manual wording.
+  # Reject its successful/non-canonical result, then parse the ACL itself.
+  if /bin/chmod -C "$mw_acl_path" >/dev/null 2>&1; then
+    return 1
+  fi
+  mw_acl_output=$(/bin/ls -lde "$mw_acl_path" 2>/dev/null) || return 1
+  printf '%s\n' "$mw_acl_output" | /usr/bin/awk -v policy="$mw_acl_policy" '
+    NR == 1 { header_seen = 1; next }
+    {
+      if ($1 !~ /^[0-9]+:$/ || NF < 4) exit 1
+      decision = $(NF - 1)
+      if (decision != "allow" && decision != "deny") exit 1
+      entries++
+      if (decision == "allow") exit 1
+    }
+    END {
+      if (!header_seen) exit 1
+      if (policy == "none" && entries != 0) exit 1
+    }
+  '
+}
+
+mw_strip_acl_from_new_node() {
+  mw_acl_new_node=$1
+  [ -e "$mw_acl_new_node" ] && [ ! -L "$mw_acl_new_node" ] || return 1
+  /bin/chmod -N "$mw_acl_new_node" >/dev/null 2>&1 || return 1
+  mw_acl_policy_is_safe "$mw_acl_new_node" none
+}
+
 # Parse launchctl's print-disabled dictionary without treating label
 # punctuation as regular-expression syntax. The complete quoted key must be
 # followed only by the dictionary arrow and a literal true value.

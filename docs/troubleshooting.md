@@ -38,7 +38,7 @@ The stable top-level record families are `MountWatchdog version=...`, `check_sco
 | `action_state=canceled` | Revalidation showed that the prior recovery action was no longer relevant. |
 | `action_state=manual-attention` | An unsafe state, timeout, inspection/verification failure, or unexpected layer requires review. |
 
-In `0.1.0-dev`, most `manual-attention` results are deliberately latched after the immediate cause is fixed. There is not yet a reviewed owner acknowledgment/reset command, and reinstall/remove preserve runtime state. Do not delete state by hand or invoke the runtime to try to clear it; this missing recovery path is a release blocker.
+Most `manual-attention` results remain latched after the immediate cause is fixed. Reinstall and remove preserve runtime state, and ordinary runtime ticks do not guess that a latch is safe to clear. Use the narrow owner acknowledgment procedure below only after reviewing the cause; never delete state by hand or run an ordinary tick merely to try to clear it.
 
 `heartbeat=input-mismatch` or `state=input-mismatch` means the cached result belongs to different config/default/version or maintained-code inputs and is intentionally not presented as current. `heartbeat_result=pending` is operationally pending; `configuration-drift`, `manual-attention`, or `blocked-command-*` is severity 2; and `inspection-error`, `state-write-error`, `clock-error`, `internal-error`, or an unsafe-state result is severity 3. A catchable service-stop signal may leave `heartbeat_result=interrupted`; an unexpected post-start shell exit makes a best-effort terminal `internal-error` record instead of silently leaving an in-progress heartbeat. `state_cache=unsafe` rejects an untrusted state path. `blocked_command=recorded` means a prior bounded command may still have a live process group; later ticks fail closed globally and never kill a process from persisted identifiers.
 
@@ -52,7 +52,7 @@ Before a normal unmount, the runtime writes a per-mount `unmount-attempt` journa
 
 An equal-epoch journal that conflicts with committed fields is reported as `conflicting`, forces `action_state=manual-attention`, and has severity 3. A different runtime fingerprint is `input-mismatch` at severity 1; an unsafe, malformed, future-dated, or clock-rollback journal is severity 3. An older unsuperseded journal with `refresh_required=1` remains visible. It preserves the newer cached attempt metadata but, when the cache would otherwise say idle/no pending work, exposes the retained pending reason with `action_state=refresh-required` and severity 1.
 
-The global `autofs-refresh` record has separate semantics. `attempting/unknown` is pending at severity 1, `completed/0` adds no error severity, and `failed/<nonzero>` is severity 1 with any recorded per-mount refresh obligation still pending. `timed-out/124` and `supervision-failed/125` are global manual-attention latches at severity 2; later runtime ticks fail closed until a reviewed reset/acknowledgment path is available. `completed/0` confirms only that `automount -c` exited successfully; per-mount fields carry subsequent mount-table verification, and none of this proves SMB readability.
+The global `autofs-refresh` record has separate semantics. `attempting/unknown` is pending at severity 1, `completed/0` adds no error severity, and `failed/<nonzero>` is severity 1 with any recorded per-mount refresh obligation still pending. `timed-out/124` and `supervision-failed/125` are global manual-attention latches at severity 2; later runtime ticks fail closed until the owner uses the reviewed acknowledgment path after resolving and inspecting the cause. `completed/0` confirms only that `automount -c` exited successfully; per-mount fields carry subsequent mount-table verification, and none of this proves SMB readability.
 
 ## Common conditions
 
@@ -76,11 +76,21 @@ A failed `automount -c` is an action error, not a successful remount. The comman
 
 `action_state=configuration-drift` means the runtime refused recovery before touching a mount. `last_error=autofs-hook-missing` is the expected signature when a macOS update restores the stock `/etc/auto_master` and removes `/- auto_smb`. The other sanitized reasons distinguish an invalid master map, missing or invalid `auto_smb`, and a selected tuple that no longer matches the map. Do not invoke the runtime or `automount -c` repeatedly; inspect the two protected files without pasting their raw credential-bearing records. Restoring a file hook or attempting the [future Open Directory migration](open-directory-migration.md) is a separate owner-authorized system change.
 
+### A resolved manual-attention latch
+
+Run the read-only status command first and investigate the recorded error. After the cause is resolved, the installed runtime exposes one explicit owner action:
+
+```bash
+sudo /usr/local/sbin/mount_watchdog.sh --acknowledge-manual-attention
+```
+
+This is not a general reset. It refuses configuration drift, active/unverifiable command evidence, durable unmount journals, unsafe or stale-input state, unexpected/ambiguous mount layers, and error reasons outside its reviewed allowlist. It takes one read-only mount-table snapshot but performs no TCP probe, mount-path access, unmount, autofs refresh, or service mutation. It preserves attempt/success history, marks eligible latches idle, records a pending heartbeat, and leaves normal observation to the next scheduled tick. Run status again after that tick; if the command refuses, preserve the evidence rather than deleting files.
+
 ### A lock remains after interruption
 
 The runtime tick lock is `/var/run/com.antoinemenard.mount-watchdog/.tick.lock`. A trustworthy live owner or live command guard prevents overlap. A later tick can reclaim a complete, trusted dead-owner lock only after proving that no guarded process group remains; an absent or malformed owner, unsafe metadata, or unverifiable live group fails closed before heartbeat or observation. Do not remove this directory based only on a stale-looking PID.
 
-`/private/var/db/MountWatchdog.lifecycle.lock` is different: it serializes installer and uninstaller mutations and is never auto-reclaimed. A lifecycle lock left by `SIGKILL` or power loss requires owner inspection of the interrupted transaction and protected backup evidence. Neither lock is an owner acknowledgment mechanism for runtime `manual-attention`, and version `0.1.0-dev` has no general manual-reset command.
+`/private/var/db/MountWatchdog.lifecycle.lock` is different: it serializes installer and uninstaller mutations and is never auto-reclaimed. A lifecycle lock left by `SIGKILL` or power loss requires owner inspection of the interrupted transaction and protected backup evidence. Neither lock is cleared by runtime owner acknowledgment, and version `0.1.0-dev` still has no general manual-reset command.
 
 ### Unexpected source or filesystem
 

@@ -16,6 +16,26 @@ mw_common_file=$mw_script_dir/lib/common.sh
 mw_runtime_file=$mw_script_dir/lib/runtime.sh
 mw_autofs_file=$mw_script_dir/lib/autofs.sh
 
+mw_bootstrap_acl_policy_is_safe() {
+  mw_bootstrap_acl_path=$1
+  mw_bootstrap_acl_policy=$2
+  mw_bootstrap_acl_output=$(/bin/ls -lde "$mw_bootstrap_acl_path" 2>/dev/null) || return 1
+  if /bin/chmod -C "$mw_bootstrap_acl_path" >/dev/null 2>&1; then
+    return 1
+  fi
+  printf '%s\n' "$mw_bootstrap_acl_output" | /usr/bin/awk -v policy="$mw_bootstrap_acl_policy" '
+    NR == 1 { header_seen = 1; next }
+    {
+      if ($1 !~ /^[0-9]+:$/ || NF < 4 || $(NF - 1) != "deny") exit 1
+      entries++
+    }
+    END {
+      if (!header_seen) exit 1
+      if (policy == "none" && entries != 0) exit 1
+    }
+  '
+}
+
 mw_test_requested=0
 [ -z "${MW_TEST_ROOT:-}${MW_TEST_COMMAND_DIR:-}" ] || mw_test_requested=1
 if [ "$mw_test_requested" -eq 1 ] && [ "$EUID" -eq 0 ]; then
@@ -28,8 +48,7 @@ if [ "$mw_test_requested" -eq 0 ]; then
     printf 'MountWatchdog: production runtime path is not canonical\n' >&2
     exit 70
   }
-  for mw_trusted_path in /Library '/Library/Application Support' \
-    "$mw_script_dir" "$mw_script_dir/lib"; do
+  for mw_trusted_path in /Library '/Library/Application Support'; do
     [ -d "$mw_trusted_path" ] && [ ! -L "$mw_trusted_path" ] || exit 70
     mw_trusted_meta=$(/usr/bin/stat -f '%Su|%Lp' "$mw_trusted_path" 2>/dev/null) || exit 70
     [ "${mw_trusted_meta%%|*}" = root ] || exit 70
@@ -37,6 +56,17 @@ if [ "$mw_test_requested" -eq 0 ]; then
     case "$mw_trusted_mode" in ''|*[!0-7]*) exit 70 ;; esac
     [ $(( (10#$mw_trusted_mode / 10) % 10 & 2 )) -eq 0 ] || exit 70
     [ $(( 10#$mw_trusted_mode % 10 & 2 )) -eq 0 ] || exit 70
+    mw_bootstrap_acl_policy_is_safe "$mw_trusted_path" deny-only || exit 70
+  done
+  for mw_trusted_path in "$mw_script_dir" "$mw_script_dir/lib"; do
+    [ -d "$mw_trusted_path" ] && [ ! -L "$mw_trusted_path" ] || exit 70
+    mw_trusted_meta=$(/usr/bin/stat -f '%Su|%Lp' "$mw_trusted_path" 2>/dev/null) || exit 70
+    [ "${mw_trusted_meta%%|*}" = root ] || exit 70
+    mw_trusted_mode=${mw_trusted_meta#*|}
+    case "$mw_trusted_mode" in ''|*[!0-7]*) exit 70 ;; esac
+    [ $(( (10#$mw_trusted_mode / 10) % 10 & 2 )) -eq 0 ] || exit 70
+    [ $(( 10#$mw_trusted_mode % 10 & 2 )) -eq 0 ] || exit 70
+    mw_bootstrap_acl_policy_is_safe "$mw_trusted_path" none || exit 70
   done
   for mw_trusted_path in "$mw_entry_path" "$mw_common_file" "$mw_runtime_file" "$mw_autofs_file" \
     "$mw_script_dir/defaults.conf" "$mw_script_dir/mounts.conf" "$mw_script_dir/VERSION"; do
@@ -47,6 +77,7 @@ if [ "$mw_test_requested" -eq 0 ]; then
     case "$mw_trusted_mode" in ''|*[!0-7]*) exit 70 ;; esac
     [ $(( (10#$mw_trusted_mode / 10) % 10 & 2 )) -eq 0 ] || exit 70
     [ $(( 10#$mw_trusted_mode % 10 & 2 )) -eq 0 ] || exit 70
+    mw_bootstrap_acl_policy_is_safe "$mw_trusted_path" none || exit 70
   done
 fi
 [ -f "$mw_common_file" ] && [ ! -L "$mw_common_file" ] || {
@@ -69,10 +100,16 @@ MW_RUNTIME_COMMON_FILE=$mw_common_file
 MW_RUNTIME_LIBRARY_FILE=$mw_runtime_file
 MW_RUNTIME_AUTOFS_FILE=$mw_autofs_file
 
-[ "$#" -eq 0 ] || {
-  mw_error 'the periodic runtime accepts no arguments; use the separate status command'
-  exit 64
-}
+mw_invocation_mode=tick
+case "$#:${1:-}" in
+  0:) ;;
+  1:--acknowledge-manual-attention) mw_invocation_mode=acknowledge ;;
+  *)
+    mw_error 'usage: mount_watchdog.sh [--acknowledge-manual-attention]'
+    mw_error 'use the separate status command for read-only diagnostics'
+    exit 64
+    ;;
+esac
 
 mw_runtime_init_paths runtime || exit 70
 mw_parse_defaults "$MW_DEFAULTS_FILE" || exit 70
@@ -83,7 +120,13 @@ mw_prepare_runtime_state || exit 70
 MW_LOCK_HELD=0
 mw_acquire_lock
 mw_lock_rc=$?
-[ "$mw_lock_rc" -ne 75 ] || exit 0
+if [ "$mw_lock_rc" -eq 75 ]; then
+  if [ "$mw_invocation_mode" = acknowledge ]; then
+    mw_error 'cannot acknowledge while a watchdog tick owns the runtime lock'
+    exit 75
+  fi
+  exit 0
+fi
 [ "$mw_lock_rc" -eq 0 ] || exit 70
 mw_clear_active_command
 MW_HEARTBEAT_RUNNING_WRITTEN=0
@@ -152,6 +195,191 @@ if ! mw_cleanup_runtime_orphan_temps; then
   mw_write_terminal_heartbeat "unsafe-state-leaf-$MW_UNSAFE_STATE_LEAF" || true
   mw_error "could not safely remove orphaned runtime temporary file: $MW_UNSAFE_STATE_LEAF"
   exit 70
+fi
+
+mw_acknowledge_error_is_clearable() {
+  case "$1" in
+    network-probe-timed-out|network-probe-supervision-failed|pre-action-inspection-failed|\
+    target-changed-before-unmount|network-recheck-timed-out|unmount-attempt-journal-failed|\
+    expected-smb-still-present-after-unmount|post-unmount-inspection-failed|\
+    normal-unmount-verification-failed|normal-unmount-timed-out|normal-unmount-supervision-failed|\
+    trigger-still-missing-after-refresh|unexpected-layer-after-refresh|post-refresh-inspection-failed|\
+    autofs-refresh-timed-out|autofs-refresh-supervision-failed|unexpected-or-ambiguous-mount-layer)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+mw_acknowledge_manual_attention() {
+  if mw_global_block_is_active; then
+    mw_error "cannot acknowledge while blocked command evidence is active: $MW_GLOBAL_BLOCK_REASON"
+    return 2
+  fi
+  if ! mw_validate_runtime_autofs_configuration; then
+    mw_error "cannot acknowledge while autofs configuration drift remains: $MW_AUTOFS_DRIFT_REASON"
+    return 2
+  fi
+
+  mw_ack_global_refresh=0
+  mw_ack_refresh_file=$MW_STATE_DIR/autofs-refresh
+  if [ -e "$mw_ack_refresh_file" ] || [ -L "$mw_ack_refresh_file" ]; then
+    mw_read_autofs_refresh_record "$mw_ack_refresh_file" || {
+      mw_error 'cannot acknowledge an invalid autofs refresh record'
+      return 70
+    }
+    mw_ack_refresh_fingerprint=$(mw_state_value "$mw_ack_refresh_file" runtime_fingerprint 2>/dev/null || true)
+    mw_ack_refresh_epoch=$(mw_state_value "$mw_ack_refresh_file" last_attempt_epoch 2>/dev/null || true)
+    [ "$mw_ack_refresh_fingerprint" = "$MW_RUNTIME_FINGERPRINT" ] &&
+      mw_is_uint "$mw_ack_refresh_epoch" && [ "$mw_ack_refresh_epoch" -le "$MW_NOW_EPOCH" ] || {
+      mw_error 'cannot acknowledge stale or clock-invalid autofs refresh evidence'
+      return 70
+    }
+    case "$MW_REFRESH_RECORD_RESULT" in
+      timed-out|supervision-failed) mw_ack_global_refresh=1 ;;
+    esac
+  fi
+
+  mw_make_temp "$MW_STATE_DIR" .mount-snapshot || {
+    mw_error 'cannot create a safe mount snapshot for acknowledgment'
+    return 70
+  }
+  mw_ack_snapshot=$MW_TEMP_PATH
+  if ! mw_capture_mount_snapshot "$mw_ack_snapshot"; then
+    /bin/rm -f "$mw_ack_snapshot" 2>/dev/null || true
+    mw_error 'cannot acknowledge without a successful read-only mount snapshot'
+    return 70
+  fi
+
+  MW_ACKNOWLEDGE_INDEXES=()
+  mw_ack_index=0
+  while [ "$mw_ack_index" -lt "${#MW_MOUNT_NAMES[@]}" ]; do
+    mw_ack_state_dir=$MW_STATE_DIR/${MW_MOUNT_NAMES[$mw_ack_index]}
+    mw_ack_state_file=$mw_ack_state_dir/status
+    mw_ack_journal=$mw_ack_state_dir/unmount-attempt
+    if [ -e "$mw_ack_journal" ] || [ -L "$mw_ack_journal" ]; then
+      /bin/rm -f "$mw_ack_snapshot" 2>/dev/null || true
+      mw_error "cannot acknowledge while durable unmount evidence remains for slot $((mw_ack_index + 1))"
+      return 2
+    fi
+    [ -f "$mw_ack_state_file" ] && [ ! -L "$mw_ack_state_file" ] || {
+      /bin/rm -f "$mw_ack_snapshot" 2>/dev/null || true
+      mw_error "cannot acknowledge without trusted state for slot $((mw_ack_index + 1))"
+      return 70
+    }
+    mw_load_mount_state "$mw_ack_state_file"
+    [ "$MW_STATE_VALID" -eq 1 ] && [ "$MW_PREV_FINGERPRINT" = "$MW_RUNTIME_FINGERPRINT" ] &&
+      [ "$MW_PREV_CHECKED" -le "$MW_NOW_EPOCH" ] || {
+      /bin/rm -f "$mw_ack_snapshot" 2>/dev/null || true
+      mw_error "cannot acknowledge invalid or stale-input state for slot $((mw_ack_index + 1))"
+      return 70
+    }
+    mw_classify_snapshot "$mw_ack_snapshot" "${MW_MOUNT_PATHS[$mw_ack_index]}" \
+      "${MW_MOUNT_HOSTS[$mw_ack_index]}" "${MW_MOUNT_SHARES[$mw_ack_index]}"
+    case "$MW_MOUNT_CLASS" in
+      expected-smb|trigger-only|trigger-missing) ;;
+      *)
+        /bin/rm -f "$mw_ack_snapshot" 2>/dev/null || true
+        mw_error "cannot acknowledge while slot $((mw_ack_index + 1)) has an unexpected or ambiguous mount layer"
+        return 2
+        ;;
+    esac
+    if [ "$MW_PREV_ACTION" = manual-attention ]; then
+      mw_acknowledge_error_is_clearable "$MW_PREV_LAST_ERROR" || {
+        /bin/rm -f "$mw_ack_snapshot" 2>/dev/null || true
+        mw_error "manual-attention reason is not owner-clearable for slot $((mw_ack_index + 1)): $MW_PREV_LAST_ERROR"
+        return 2
+      }
+      MW_ACKNOWLEDGE_INDEXES[${#MW_ACKNOWLEDGE_INDEXES[@]}]=$mw_ack_index
+    fi
+    mw_ack_index=$((mw_ack_index + 1))
+  done
+
+  if [ "$mw_ack_global_refresh" -eq 0 ] && [ "${#MW_ACKNOWLEDGE_INDEXES[@]}" -eq 0 ]; then
+    /bin/rm -f "$mw_ack_snapshot" 2>/dev/null || true
+    mw_error 'no reviewed manual-attention latch is eligible for acknowledgment'
+    return 2
+  fi
+  if ! mw_validate_runtime_autofs_configuration; then
+    /bin/rm -f "$mw_ack_snapshot" 2>/dev/null || true
+    mw_error "autofs configuration changed during acknowledgment: $MW_AUTOFS_DRIFT_REASON"
+    return 2
+  fi
+
+  if [ "$mw_ack_global_refresh" -eq 1 ]; then
+    /bin/rm -f "$mw_ack_refresh_file" || {
+      /bin/rm -f "$mw_ack_snapshot" 2>/dev/null || true
+      mw_error 'could not retire acknowledged autofs refresh evidence'
+      return 70
+    }
+  fi
+
+  mw_ack_position=0
+  while [ "$mw_ack_position" -lt "${#MW_ACKNOWLEDGE_INDEXES[@]}" ]; do
+    mw_ack_index=${MW_ACKNOWLEDGE_INDEXES[$mw_ack_position]}
+    mw_ack_state_file=$MW_STATE_DIR/${MW_MOUNT_NAMES[$mw_ack_index]}/status
+    mw_load_mount_state "$mw_ack_state_file"
+    if [ "$MW_STATE_VALID" -ne 1 ] || [ "$MW_PREV_FINGERPRINT" != "$MW_RUNTIME_FINGERPRINT" ] ||
+      [ "$MW_PREV_ACTION" != manual-attention ] || ! mw_acknowledge_error_is_clearable "$MW_PREV_LAST_ERROR"; then
+      /bin/rm -f "$mw_ack_snapshot" 2>/dev/null || true
+      mw_error "manual-attention state changed during acknowledgment for slot $((mw_ack_index + 1))"
+      return 70
+    fi
+    mw_classify_snapshot "$mw_ack_snapshot" "${MW_MOUNT_PATHS[$mw_ack_index]}" \
+      "${MW_MOUNT_HOSTS[$mw_ack_index]}" "${MW_MOUNT_SHARES[$mw_ack_index]}"
+    mw_ack_summary=$(mw_summary_state "$MW_MOUNT_CLASS" unknown)
+    mw_atomic_write_lines "$mw_ack_state_file" \
+      "format|$MW_STATE_FORMAT" \
+      "checked_at_epoch|$MW_NOW_EPOCH" \
+      "checked_at|$MW_NOW_ISO" \
+      "mount_name|${MW_MOUNT_NAMES[$mw_ack_index]}" \
+      "mount_path|${MW_MOUNT_PATHS[$mw_ack_index]}" \
+      "expected_host|${MW_MOUNT_HOSTS[$mw_ack_index]}" \
+      "expected_share|${MW_MOUNT_SHARES[$mw_ack_index]}" \
+      "state|$mw_ack_summary" \
+      "mount_state|$MW_MOUNT_CLASS" \
+      'network_state|unknown' \
+      "last_network_state|$MW_PREV_NETWORK" \
+      "check_scope|$MW_CHECK_SCOPE" \
+      "readability|$MW_READABILITY" \
+      "runtime_fingerprint|$MW_RUNTIME_FINGERPRINT" \
+      'initialized|1' \
+      "pending_recovery|$MW_PREV_PENDING" \
+      "pending_since_epoch|$MW_PREV_PENDING_SINCE" \
+      'action_state|idle' \
+      "last_attempt_epoch|$MW_PREV_LAST_ATTEMPT" \
+      "last_attempt_action|$MW_PREV_LAST_ATTEMPT_ACTION" \
+      "last_attempt_result|$MW_PREV_LAST_ATTEMPT_RESULT" \
+      "last_attempt_exit_status|$MW_PREV_LAST_ATTEMPT_EXIT_STATUS" \
+      "last_successful_action_epoch|$MW_PREV_LAST_SUCCESS" \
+      "last_successful_action|$MW_PREV_LAST_SUCCESS_ACTION" \
+      'last_error|none' \
+      'blocked_pid|none' || {
+      /bin/rm -f "$mw_ack_snapshot" 2>/dev/null || true
+      mw_error "could not commit acknowledged state for slot $((mw_ack_index + 1))"
+      return 70
+    }
+    mw_ack_position=$((mw_ack_position + 1))
+  done
+  /bin/rm -f "$mw_ack_snapshot" || {
+    mw_error 'could not remove acknowledgment mount snapshot'
+    return 70
+  }
+  MW_TICK_COMPLETED_EPOCH=$MW_NOW_EPOCH
+  mw_write_terminal_heartbeat pending || {
+    mw_error 'could not commit post-acknowledgment heartbeat'
+    return 70
+  }
+  mw_log_global_event owner-acknowledgment manual-attention reviewed-latch-cleared pending-reevaluation
+  printf 'MountWatchdog acknowledged %s per-mount latch(es); global refresh latch acknowledged=%s.\n' \
+    "${#MW_ACKNOWLEDGE_INDEXES[@]}" "$mw_ack_global_refresh"
+  printf 'No mount, network probe, unmount, or autofs refresh was performed; wait for the next scheduled tick.\n'
+  return 0
+}
+
+if [ "$mw_invocation_mode" = acknowledge ]; then
+  mw_acknowledge_manual_attention
+  exit $?
 fi
 
 mw_previous_heartbeat=$MW_STATE_DIR/heartbeat

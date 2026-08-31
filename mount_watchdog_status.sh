@@ -14,6 +14,26 @@ mw_script_dir=${mw_entry_path%/*}
 mw_common_file=$mw_script_dir/lib/common.sh
 mw_runtime_file=$mw_script_dir/lib/runtime.sh
 mw_autofs_file=$mw_script_dir/lib/autofs.sh
+
+mw_bootstrap_acl_policy_is_safe() {
+  mw_bootstrap_acl_path=$1
+  mw_bootstrap_acl_policy=$2
+  mw_bootstrap_acl_output=$(/bin/ls -lde "$mw_bootstrap_acl_path" 2>/dev/null) || return 1
+  if /bin/chmod -C "$mw_bootstrap_acl_path" >/dev/null 2>&1; then
+    return 1
+  fi
+  printf '%s\n' "$mw_bootstrap_acl_output" | /usr/bin/awk -v policy="$mw_bootstrap_acl_policy" '
+    NR == 1 { header_seen = 1; next }
+    {
+      if ($1 !~ /^[0-9]+:$/ || NF < 4 || $(NF - 1) != "deny") exit 1
+      entries++
+    }
+    END {
+      if (!header_seen) exit 1
+      if (policy == "none" && entries != 0) exit 1
+    }
+  '
+}
 mw_test_requested=0
 [ -z "${MW_TEST_ROOT:-}${MW_TEST_COMMAND_DIR:-}" ] || mw_test_requested=1
 mw_watchdog_file=$mw_script_dir/watchdog.sh
@@ -24,8 +44,7 @@ if [ "$mw_test_requested" -eq 1 ] && [ "$EUID" -eq 0 ]; then
 fi
 if [ "$mw_test_requested" -eq 0 ]; then
   [ "$mw_script_dir" = '/Library/Application Support/MountWatchdog' ] || exit 3
-  for mw_trusted_path in /Library '/Library/Application Support' \
-    "$mw_script_dir" "$mw_script_dir/lib"; do
+  for mw_trusted_path in /Library '/Library/Application Support'; do
     [ -d "$mw_trusted_path" ] && [ ! -L "$mw_trusted_path" ] || exit 3
     mw_trusted_meta=$(/usr/bin/stat -f '%Su|%Lp' "$mw_trusted_path" 2>/dev/null) || exit 3
     [ "${mw_trusted_meta%%|*}" = root ] || exit 3
@@ -33,6 +52,17 @@ if [ "$mw_test_requested" -eq 0 ]; then
     case "$mw_trusted_mode" in ''|*[!0-7]*) exit 3 ;; esac
     [ $(( (10#$mw_trusted_mode / 10) % 10 & 2 )) -eq 0 ] || exit 3
     [ $(( 10#$mw_trusted_mode % 10 & 2 )) -eq 0 ] || exit 3
+    mw_bootstrap_acl_policy_is_safe "$mw_trusted_path" deny-only || exit 3
+  done
+  for mw_trusted_path in "$mw_script_dir" "$mw_script_dir/lib"; do
+    [ -d "$mw_trusted_path" ] && [ ! -L "$mw_trusted_path" ] || exit 3
+    mw_trusted_meta=$(/usr/bin/stat -f '%Su|%Lp' "$mw_trusted_path" 2>/dev/null) || exit 3
+    [ "${mw_trusted_meta%%|*}" = root ] || exit 3
+    mw_trusted_mode=${mw_trusted_meta#*|}
+    case "$mw_trusted_mode" in ''|*[!0-7]*) exit 3 ;; esac
+    [ $(( (10#$mw_trusted_mode / 10) % 10 & 2 )) -eq 0 ] || exit 3
+    [ $(( 10#$mw_trusted_mode % 10 & 2 )) -eq 0 ] || exit 3
+    mw_bootstrap_acl_policy_is_safe "$mw_trusted_path" none || exit 3
   done
   for mw_trusted_path in "$mw_entry_path" "$mw_watchdog_file" "$mw_common_file" "$mw_runtime_file" "$mw_autofs_file" \
     "$mw_script_dir/defaults.conf" "$mw_script_dir/mounts.conf" "$mw_script_dir/VERSION"; do
@@ -43,6 +73,7 @@ if [ "$mw_test_requested" -eq 0 ]; then
     case "$mw_trusted_mode" in ''|*[!0-7]*) exit 3 ;; esac
     [ $(( (10#$mw_trusted_mode / 10) % 10 & 2 )) -eq 0 ] || exit 3
     [ $(( 10#$mw_trusted_mode % 10 & 2 )) -eq 0 ] || exit 3
+    mw_bootstrap_acl_policy_is_safe "$mw_trusted_path" none || exit 3
   done
 fi
 [ -f "$mw_common_file" ] && [ ! -L "$mw_common_file" ] || {

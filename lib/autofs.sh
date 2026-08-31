@@ -363,7 +363,7 @@ mw_parse_auto_smb() {
 mw_validate_runtime_autofs_configuration() {
   MW_AUTOFS_DRIFT_REASON=autofs-master-map-invalid
 
-  if ! mw_regular_file_is_trusted "$MW_AUTO_MASTER_FILE" ||
+  if ! mw_regular_file_is_trusted "$MW_AUTO_MASTER_FILE" deny-only ||
     ! mw_file_has_single_link "$MW_AUTO_MASTER_FILE"; then
     return 1
   fi
@@ -379,7 +379,7 @@ mw_validate_runtime_autofs_configuration() {
     return 1
   fi
   MW_AUTOFS_DRIFT_REASON=autofs-selected-map-invalid
-  if ! mw_regular_file_is_trusted "$MW_AUTO_SMB_FILE" ||
+  if ! mw_regular_file_is_trusted "$MW_AUTO_SMB_FILE" deny-only ||
     ! mw_file_has_single_link "$MW_AUTO_SMB_FILE" ||
     ! mw_parse_auto_smb "$MW_AUTO_SMB_FILE" "$MW_CONFIG_LOCAL_USER" ||
     ! mw_validate_auto_master_selected_paths "${MW_MOUNT_PATHS[@]}"; then
