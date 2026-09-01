@@ -366,6 +366,64 @@ fi
 assert_not_action "$FIXTURE/actions.log" automount
 pass 'valid selected map detection remains credential-safe'
 
+# A narrow, well-formed static NFS target may coexist when it is structurally
+# disjoint from every selected SMB path. Its source is never reported.
+drop_fixture
+new_fixture
+write_one_config
+write_expected_media_mount
+printf 'private-server:/RuntimeFstabSecret /Users/testuser/Developer/mnt/docker nfs rw,resvport 0 0\n' > "$FIXTURE/etc/fstab"
+: > "$FIXTURE/preserve-autofs-fixture"
+MW_TEST_ROOT=$FIXTURE MW_TEST_COMMAND_DIR=$COMMANDS /bin/bash "$RUNTIME" > "$FIXTURE/disjoint-fstab.out" 2>&1
+RUNTIME_RC=$?
+[ "$RUNTIME_RC" -eq 0 ] || fail "disjoint fstab runtime exited $RUNTIME_RC"
+if /usr/bin/grep -R -Fq 'RuntimeFstabSecret' "$FIXTURE/disjoint-fstab.out" "$FIXTURE/watchdog.log" "$FIXTURE/state"; then
+  fail 'disjoint fstab validation exposed private source material'
+fi
+pass 'disjoint static fstab target remains supported and credential-safe'
+
+# An overlapping static direct target is configuration drift, not an outage.
+drop_fixture
+new_fixture
+write_one_config
+write_expected_media_mount
+printf 'private-server:/OverlapFstabSecret /Users/testuser/Media nfs rw 0 0\n' > "$FIXTURE/etc/fstab"
+: > "$FIXTURE/preserve-autofs-fixture"
+MW_TEST_ROOT=$FIXTURE MW_TEST_COMMAND_DIR=$COMMANDS /bin/bash "$RUNTIME" > "$FIXTURE/overlap-fstab.out" 2>&1
+RUNTIME_RC=$?
+[ "$RUNTIME_RC" -eq 2 ] || fail "overlapping fstab drift exited $RUNTIME_RC"
+assert_contains "$FIXTURE/state/Media/status" 'action_state|configuration-drift'
+assert_contains "$FIXTURE/state/Media/status" 'last_error|autofs-static-map-conflict'
+if /usr/bin/grep -R -Fq 'OverlapFstabSecret' "$FIXTURE/overlap-fstab.out" "$FIXTURE/watchdog.log" "$FIXTURE/state"; then
+  fail 'overlapping fstab validation exposed private source material'
+fi
+assert_not_action "$FIXTURE/actions.log" mount
+assert_not_action "$FIXTURE/actions.log" nc
+assert_not_action "$FIXTURE/actions.log" umount
+assert_not_action "$FIXTURE/actions.log" automount
+pass 'overlapping static fstab target fails closed as configuration drift'
+
+# Malformed fstab data also fails before any observation without echoing the
+# source field that may contain private infrastructure details.
+drop_fixture
+new_fixture
+write_one_config
+write_expected_media_mount
+printf 'private-server:/MalformedRuntimeFstabSecret /Users/testuser/Developer/mnt/docker nfs defaults 0 0\n' > "$FIXTURE/etc/fstab"
+: > "$FIXTURE/preserve-autofs-fixture"
+MW_TEST_ROOT=$FIXTURE MW_TEST_COMMAND_DIR=$COMMANDS /bin/bash "$RUNTIME" > "$FIXTURE/malformed-fstab.out" 2>&1
+RUNTIME_RC=$?
+[ "$RUNTIME_RC" -eq 2 ] || fail "malformed fstab drift exited $RUNTIME_RC"
+assert_contains "$FIXTURE/state/Media/status" 'last_error|autofs-static-map-invalid'
+if /usr/bin/grep -R -Fq 'MalformedRuntimeFstabSecret' "$FIXTURE/malformed-fstab.out" "$FIXTURE/watchdog.log" "$FIXTURE/state"; then
+  fail 'malformed fstab validation exposed private source material'
+fi
+assert_not_action "$FIXTURE/actions.log" mount
+assert_not_action "$FIXTURE/actions.log" nc
+assert_not_action "$FIXTURE/actions.log" umount
+assert_not_action "$FIXTURE/actions.log" automount
+pass 'malformed static fstab fails closed without source leakage'
+
 # Revalidation closes the gap between initial observation and a normal unmount.
 drop_fixture
 new_fixture
@@ -385,6 +443,24 @@ assert_contains "$FIXTURE/state/Media/status" 'last_error|autofs-hook-missing'
 assert_not_action "$FIXTURE/actions.log" umount
 assert_not_action "$FIXTURE/actions.log" automount
 pass 'master-map drift discovered before unmount blocks the action'
+
+# The same last-moment guard covers a newly overlapping -static target.
+drop_fixture
+new_fixture
+write_one_config
+write_expected_media_mount
+seed_state Media /Users/testuser/Media 192.0.2.10 Media unreachable
+printf 'private-server:/ChangedFstabSecret /Users/testuser/Media nfs rw 0 0\n' > "$FIXTURE/fstab.after_mount.1"
+run_runtime
+[ "$RUNTIME_RC" -eq 2 ] || fail "pre-unmount fstab drift exited $RUNTIME_RC"
+assert_contains "$FIXTURE/state/Media/status" 'action_state|configuration-drift'
+assert_contains "$FIXTURE/state/Media/status" 'last_error|autofs-static-map-conflict'
+if /usr/bin/grep -R -Fq 'ChangedFstabSecret' "$FIXTURE/watchdog.log" "$FIXTURE/state"; then
+  fail 'pre-action fstab drift exposed private source material'
+fi
+assert_not_action "$FIXTURE/actions.log" umount
+assert_not_action "$FIXTURE/actions.log" automount
+pass 'static-map drift discovered before unmount blocks the action'
 
 # Refresh-only recovery has an independent last-moment map validation.
 drop_fixture

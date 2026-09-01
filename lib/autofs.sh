@@ -190,6 +190,116 @@ mw_validate_auto_master_selected_paths() {
   return 0
 }
 
+# Validate the narrow fstab subset that can feed Apple's standard -static
+# direct map. The source field is deliberately neither interpreted nor
+# reported because it may contain private server or volume identifiers.
+# shellcheck disable=SC2034 # MW_FSTAB_ERROR_KIND is consumed by callers.
+mw_validate_fstab_selected_paths() {
+  mw_fstab_file=$1
+  shift
+  MW_FSTAB_SELECTED_PATHS=("$@")
+  MW_FSTAB_ERROR_KIND=invalid
+  [ -f "$mw_fstab_file" ] && [ ! -L "$mw_fstab_file" ] || {
+    mw_autofs_error 'fstab is missing, not regular, or a symlink'
+    return 1
+  }
+
+  mw_fstab_line_number=0
+  while IFS= read -r mw_fstab_line || [ -n "$mw_fstab_line" ]; do
+    mw_fstab_line_number=$((mw_fstab_line_number + 1))
+    mw_fstab_old_ifs=$IFS
+    IFS=' 	'
+    set -f
+    # shellcheck disable=SC2086 # Intentional whitespace field split; globbing is disabled.
+    set -- $mw_fstab_line
+    set +f
+    IFS=$mw_fstab_old_ifs
+    [ "$#" -gt 0 ] || continue
+    case "$1" in
+      \#*) continue ;;
+    esac
+
+    [ "$#" -ge 4 ] && [ "$#" -le 6 ] || {
+      mw_autofs_error "malformed fstab record at line $mw_fstab_line_number"
+      return 1
+    }
+    mw_fstab_target=$2
+    mw_fstab_type=$3
+    mw_fstab_options=$4
+    case "$mw_fstab_type" in
+      ''|*[!A-Za-z0-9._-]*)
+        mw_autofs_error "malformed fstab filesystem type at line $mw_fstab_line_number"
+        return 1
+        ;;
+    esac
+    if [ "$#" -ge 5 ]; then
+      case "$5" in ''|*[!0-9]*) mw_autofs_error "malformed fstab frequency at line $mw_fstab_line_number"; return 1 ;; esac
+    fi
+    if [ "$#" -eq 6 ]; then
+      case "$6" in ''|*[!0-9]*) mw_autofs_error "malformed fstab pass number at line $mw_fstab_line_number"; return 1 ;; esac
+    fi
+
+    mw_fstab_has_net=0
+    mw_fstab_mount_type=
+    mw_fstab_mount_type_count=0
+    mw_fstab_options_rest=$mw_fstab_options
+    while :; do
+      mw_fstab_option=${mw_fstab_options_rest%%,*}
+      [ -n "$mw_fstab_option" ] || {
+        mw_autofs_error "malformed fstab options at line $mw_fstab_line_number"
+        return 1
+      }
+      case "$mw_fstab_option" in
+        net) mw_fstab_has_net=1 ;;
+        rw|ro|sw|xx)
+          mw_fstab_mount_type=$mw_fstab_option
+          mw_fstab_mount_type_count=$((mw_fstab_mount_type_count + 1))
+          ;;
+      esac
+      case "$mw_fstab_options_rest" in
+        *,*) mw_fstab_options_rest=${mw_fstab_options_rest#*,} ;;
+        *) break ;;
+      esac
+    done
+    [ "$mw_fstab_mount_type_count" -eq 1 ] || {
+      mw_autofs_error "ambiguous fstab mount type at line $mw_fstab_line_number"
+      return 1
+    }
+
+    # net records feed -fstab rather than -static. sw and xx do not describe
+    # active direct filesystem targets. Their source and target remain data.
+    if [ "$mw_fstab_has_net" -eq 1 ] || [ "$mw_fstab_mount_type" = sw ] || [ "$mw_fstab_mount_type" = xx ]; then
+      continue
+    fi
+
+    # macOS uses the literal target "none" for some local-volume policies.
+    # It cannot overlap an absolute selected autofs path.
+    if [ "$mw_fstab_target" = none ]; then
+      continue
+    fi
+    mw_is_absolute_path "$mw_fstab_target" || {
+      mw_autofs_error "unsupported fstab mount target at line $mw_fstab_line_number"
+      return 1
+    }
+    case "$mw_fstab_target" in
+      */|*[!A-Za-z0-9._/@%+,:=-]*)
+        mw_autofs_error "unsupported fstab mount target at line $mw_fstab_line_number"
+        return 1
+        ;;
+    esac
+
+    for mw_fstab_selected_path in "${MW_FSTAB_SELECTED_PATHS[@]}"; do
+      if mw_autofs_paths_overlap "$mw_fstab_target" "$mw_fstab_selected_path"; then
+        MW_FSTAB_ERROR_KIND=conflict
+        mw_autofs_error "conflicting -static fstab target at line $mw_fstab_line_number"
+        return 1
+      fi
+    done
+  done < "$mw_fstab_file"
+
+  return 0
+}
+
 mw_autofs_validate_options() {
   mw_options_token=$1
   case "$mw_options_token" in
@@ -384,6 +494,20 @@ mw_validate_runtime_autofs_configuration() {
     ! mw_parse_auto_smb "$MW_AUTO_SMB_FILE" "$MW_CONFIG_LOCAL_USER" ||
     ! mw_validate_auto_master_selected_paths "${MW_MOUNT_PATHS[@]}"; then
     return 1
+  fi
+
+  if [ "$MW_AUTO_MASTER_STATIC_PRESENT" -eq 1 ] &&
+    { [ -e "$MW_FSTAB_FILE" ] || [ -L "$MW_FSTAB_FILE" ]; }; then
+    MW_AUTOFS_DRIFT_REASON=autofs-static-map-invalid
+    MW_FSTAB_ERROR_KIND=invalid
+    if ! mw_regular_file_is_trusted "$MW_FSTAB_FILE" deny-only ||
+      ! mw_file_has_single_link "$MW_FSTAB_FILE" ||
+      ! mw_validate_fstab_selected_paths "$MW_FSTAB_FILE" "${MW_MOUNT_PATHS[@]}"; then
+      if [ "${MW_FSTAB_ERROR_KIND:-invalid}" = conflict ]; then
+        MW_AUTOFS_DRIFT_REASON=autofs-static-map-conflict
+      fi
+      return 1
+    fi
   fi
 
   mw_runtime_selected_index=0

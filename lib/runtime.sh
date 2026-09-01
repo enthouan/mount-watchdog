@@ -63,6 +63,7 @@ mw_runtime_init_paths() {
     MW_VERSION_FILE=$MW_TEST_ROOT/VERSION
     MW_AUTO_MASTER_FILE=$MW_TEST_ROOT/etc/auto_master
     MW_AUTO_SMB_FILE=$MW_TEST_ROOT/etc/auto_smb
+    MW_FSTAB_FILE=$MW_TEST_ROOT/etc/fstab
     MW_STATE_DIR=$MW_TEST_ROOT/state
     MW_LOG_FILE=$MW_TEST_ROOT/watchdog.log
     MW_CMD_MOUNT=$MW_TEST_COMMAND_DIR/mount
@@ -78,6 +79,7 @@ mw_runtime_init_paths() {
     MW_VERSION_FILE='/Library/Application Support/MountWatchdog/VERSION'
     MW_AUTO_MASTER_FILE=/etc/auto_master
     MW_AUTO_SMB_FILE=/etc/auto_smb
+    MW_FSTAB_FILE=/etc/fstab
     MW_STATE_DIR=/var/run/com.antoinemenard.mount-watchdog
     MW_LOG_FILE=/var/log/mount-watchdog.log
     MW_CMD_MOUNT=/sbin/mount
@@ -245,7 +247,7 @@ mw_success_action_value_is_valid() {
 
 mw_last_error_value_is_valid() {
   case "${1:-}" in
-    none|autofs-hook-missing|autofs-master-map-invalid|autofs-selected-map-missing|autofs-selected-map-invalid|autofs-selected-mapping-mismatch|mount-inspection-failed|state-requires-manual-attention|another-command-requires-manual-attention|network-probe-timed-out|network-probe-supervision-failed|pre-action-inspection-failed|target-changed-before-unmount|network-recheck-timed-out|unmount-attempt-journal-failed|unmount-attempt-not-finalized|expected-smb-still-present-after-unmount|post-unmount-inspection-failed|normal-unmount-verification-failed|normal-unmount-timed-out|normal-unmount-supervision-failed|normal-unmount-busy|normal-unmount-failed|trigger-still-missing-after-refresh|unexpected-layer-after-refresh|post-refresh-inspection-failed|autofs-refresh-failed|autofs-refresh-timed-out|autofs-refresh-supervision-failed|unexpected-or-ambiguous-mount-layer) return 0 ;;
+    none|autofs-hook-missing|autofs-master-map-invalid|autofs-selected-map-missing|autofs-selected-map-invalid|autofs-selected-mapping-mismatch|autofs-static-map-invalid|autofs-static-map-conflict|mount-inspection-failed|state-requires-manual-attention|another-command-requires-manual-attention|network-probe-timed-out|network-probe-supervision-failed|pre-action-inspection-failed|target-changed-before-unmount|network-recheck-timed-out|unmount-attempt-journal-failed|unmount-attempt-not-finalized|expected-smb-still-present-after-unmount|post-unmount-inspection-failed|normal-unmount-verification-failed|normal-unmount-timed-out|normal-unmount-supervision-failed|normal-unmount-busy|normal-unmount-failed|trigger-still-missing-after-refresh|unexpected-layer-after-refresh|post-refresh-inspection-failed|autofs-refresh-failed|autofs-refresh-timed-out|autofs-refresh-supervision-failed|unexpected-or-ambiguous-mount-layer) return 0 ;;
   esac
   return 1
 }

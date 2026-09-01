@@ -489,18 +489,44 @@ test_disabled_and_unloaded_states_are_preserved() {
   /usr/bin/grep -R -q $'result\trolled-back' "$root_loaded/Library/Application Support/MountWatchdog/backups" || return 1
 }
 
-test_strict_map_failures_are_redacted_and_nonmutating() {
+test_strict_map_and_static_fstab_validation_is_redacted_and_nonmutating() {
   root=$(new_root malformed)
   printf '/Users/testuser/Media -fstype=nfs ://test:do-not-print@192.0.2.10/Media\n' > "$root/etc/auto_smb"
   if run_install "$root" --dry-run Media; then return 1; fi
   ! /usr/bin/grep -q 'do-not-print' "$TEST_TMP/${root##*/}-install-output" || return 1
   assert_file_absent "$root/Library" || return 1
 
-  root2=$(new_root fstab)
-  printf 'server:/export /Users/testuser/Media nfs rw 0 0\n' > "$root2/etc/fstab"
+  root2=$(new_root fstab-overlap)
+  printf 'private-server:/private-export /Users/testuser/Media nfs rw 0 0\n' > "$root2/etc/fstab"
   if run_install "$root2" --dry-run Media; then return 1; fi
-  /usr/bin/grep -q 'active fstab records' "$TEST_TMP/${root2##*/}-install-output" || return 1
+  /usr/bin/grep -q 'conflicting -static fstab target at line 1' "$TEST_TMP/${root2##*/}-install-output" || return 1
+  ! /usr/bin/grep -q 'private-server\|private-export' "$TEST_TMP/${root2##*/}-install-output" || return 1
   assert_file_absent "$root2/Library" || return 1
+
+  root3=$(new_root fstab-disjoint)
+  printf 'private-server:/private-export /Users/testuser/Developer/mnt/docker nfs rw,resvport 0 0\n' > "$root3/etc/fstab"
+  run_install "$root3" --dry-run Media || return 1
+  /usr/bin/grep -q 'Dry-run complete' "$TEST_TMP/${root3##*/}-install-output" || return 1
+  ! /usr/bin/grep -q 'private-server\|private-export' "$TEST_TMP/${root3##*/}-install-output" || return 1
+  assert_file_absent "$root3/Library" || return 1
+
+  root4=$(new_root fstab-special-records)
+  {
+    printf 'UUID=00000000-0000-0000-0000-000000000000 none apfs rw,noauto 0 0\n'
+    printf 'private-server:/private-export /Users/testuser/Media nfs rw,net 0 0\n'
+    printf 'ignored-source /Users/testuser/Media nfs xx 0 0\n'
+  } > "$root4/etc/fstab"
+  run_install "$root4" --dry-run Media || return 1
+  /usr/bin/grep -q 'Dry-run complete' "$TEST_TMP/${root4##*/}-install-output" || return 1
+  ! /usr/bin/grep -q 'private-server\|private-export\|ignored-source' "$TEST_TMP/${root4##*/}-install-output" || return 1
+  assert_file_absent "$root4/Library" || return 1
+
+  root5=$(new_root fstab-malformed)
+  printf 'private-server:/MalformedFstabSecret /Users/testuser/Developer/mnt/docker nfs defaults 0 0\n' > "$root5/etc/fstab"
+  if run_install "$root5" --dry-run Media; then return 1; fi
+  /usr/bin/grep -q 'ambiguous fstab mount type at line 1' "$TEST_TMP/${root5##*/}-install-output" || return 1
+  ! /usr/bin/grep -q 'private-server\|MalformedFstabSecret' "$TEST_TMP/${root5##*/}-install-output" || return 1
+  assert_file_absent "$root5/Library" || return 1
 }
 
 test_explicit_master_targets_cannot_overlap_selected_paths() {
@@ -1228,7 +1254,7 @@ run_test 'installer rollback distinguishes bootout failure before and after effe
 run_test 'staging action logs reject hardlinks to outside sentinels' test_staging_action_logs_reject_external_hardlinks
 run_test 'uninstaller rollback and commit signals have deterministic nonreentrant outcomes' test_uninstaller_transaction_signals_are_nonreentrant
 run_test 'disabled and enabled-but-unloaded service states are preserved' test_disabled_and_unloaded_states_are_preserved
-run_test 'unsupported map and active static records fail before mutation without secrets' test_strict_map_failures_are_redacted_and_nonmutating
+run_test 'map and static fstab validation is overlap-aware redacted and nonmutating' test_strict_map_and_static_fstab_validation_is_redacted_and_nonmutating
 run_test 'explicit master targets cannot overlap selected paths' test_explicit_master_targets_cannot_overlap_selected_paths
 run_test 'dangling fstab symlinks fail closed before mutation' test_dangling_fstab_symlink_is_rejected
 run_test 'symlinked staging roots and privileged destination components are rejected' test_symlinked_root_and_destination_are_rejected

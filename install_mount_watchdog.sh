@@ -264,6 +264,7 @@ mw_acl_policy_is_safe "$mw_master" deny-only || mw_die 'auto_master ACL is unsaf
 mw_acl_policy_is_safe "$mw_smb" deny-only || mw_die 'auto_smb ACL is unsafe'
 mw_validate_auto_master "$mw_master" || exit 1
 mw_parse_auto_smb "$mw_smb" "$mw_local_user" || exit 1
+mw_fstab=
 if [ "$MW_AUTO_MASTER_STATIC_PRESENT" -eq 1 ]; then
   mw_fstab=$(mw_dest /etc/fstab) || mw_die 'cannot resolve fstab'
   if [ -e "$mw_fstab" ] || [ -L "$mw_fstab" ]; then
@@ -271,11 +272,6 @@ if [ "$MW_AUTO_MASTER_STATIC_PRESENT" -eq 1 ]; then
     [ -f "$mw_fstab" ] && [ ! -L "$mw_fstab" ] || mw_die 'fstab is not a safe regular file'
     [ -n "$mw_root" ] || mw_validate_live_regular "$mw_fstab" || mw_die 'fstab must be root-owned and non-writable'
     mw_acl_policy_is_safe "$mw_fstab" deny-only || mw_die 'fstab ACL is unsafe'
-    while IFS= read -r mw_fstab_line || [ -n "$mw_fstab_line" ]; do
-      mw_fstab_trimmed=$(printf '%s\n' "$mw_fstab_line" | /usr/bin/sed 's/^[[:space:]]*//')
-      case "$mw_fstab_trimmed" in ''|'#'*) continue ;; esac
-      mw_die 'active fstab records make the standard -static direct map ambiguous'
-    done < "$mw_fstab"
   fi
 fi
 
@@ -297,6 +293,9 @@ for mw_name in "${MW_REQUESTED[@]}"; do
   MW_SELECTED_SHARES[${#MW_SELECTED_SHARES[@]}]=${MW_AUTO_SHARES[$mw_found]}
 done
 mw_validate_auto_master_selected_paths "${MW_SELECTED_PATHS[@]}" || exit 1
+if [ -n "$mw_fstab" ] && { [ -e "$mw_fstab" ] || [ -L "$mw_fstab" ]; }; then
+  mw_validate_fstab_selected_paths "$mw_fstab" "${MW_SELECTED_PATHS[@]}" || exit 1
+fi
 
 for mw_source in \
   "$mw_installer_dir/mount_watchdog.sh" \
