@@ -63,7 +63,7 @@ The periodic runtime uses `/var/run/com.antoinemenard.mount-watchdog/.tick.lock`
 First use the read-only status command, investigate the recorded cause, and fix it outside MountWatchdog. The acknowledgment is eligible only when the current autofs hookup is valid, no command or durable unmount journal remains, selected paths have reviewed layer shapes, and every latch uses the narrow allowlist.
 
 ```bash
-sudo /usr/local/sbin/mount_watchdog.sh --acknowledge-manual-attention
+sudo /bin/bash '/Library/Application Support/MountWatchdog/watchdog.sh' --acknowledge-manual-attention
 ```
 
 This command shares the runtime tick lock, validates state and configuration, and takes one read-only mount-table snapshot. It performs no TCP probe, managed-path access, unmount, `automount -c`, or launchd mutation. It refuses active drift, unsafe state, unexpected layers, live command evidence, and unreviewed reasons.

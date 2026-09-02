@@ -52,8 +52,6 @@ copy_installer_tree() {
   /bin/cp "$PROJECT_DIR/lib/runtime.sh" "$copy_target/lib/runtime.sh"
   /bin/cp "$PROJECT_DIR/config/defaults.conf" "$copy_target/config/defaults.conf"
   /bin/cp "$PROJECT_DIR/packaging/com.antoinemenard.mount-watchdog.plist.in" "$copy_target/packaging/com.antoinemenard.mount-watchdog.plist.in"
-  /bin/cp "$PROJECT_DIR/packaging/runtime-wrapper.sh" "$copy_target/packaging/runtime-wrapper.sh"
-  /bin/cp "$PROJECT_DIR/packaging/status-wrapper.sh" "$copy_target/packaging/status-wrapper.sh"
 }
 
 test_dry_run_is_read_only_and_redacted() {
@@ -270,18 +268,26 @@ test_staged_version_and_plist_schema_are_strict() {
 test_install_preserves_parent_modes_and_strips_credentials() {
   root=$(new_root install)
   /bin/mkdir -p "$root/Library/LaunchDaemons" "$root/usr/local/sbin"
-  /bin/chmod 755 "$root/Library/LaunchDaemons" "$root/usr/local/sbin"
+  /bin/chmod 755 "$root/Library/LaunchDaemons"
+  /bin/chmod 775 "$root/usr/local/sbin"
+  printf 'homebrew-owned sentinel\n' > "$root/usr/local/sbin/homebrew-owned"
   run_install "$root" Media Studio || { /bin/cat "$TEST_TMP/${root##*/}-install-output" >&2; return 1; }
   config="$root/Library/Application Support/MountWatchdog/mounts.conf"
+  manifest="$root/Library/Application Support/MountWatchdog/install-manifest.tsv"
   [ -f "$config" ] || return 1
+  [ -f "$manifest" ] || return 1
+  ! /usr/bin/grep -Fq '/usr/local' "$manifest" || return 1
   expected=$(printf 'Media\t/Users/testuser/Media\t192.0.2.10\tMedia\nStudio\t/Users/testuser/Studio\t192.0.2.10\tWorkspace')
   actual=$(/bin/cat "$config")
   assert_eq "$expected" "$actual" 'installed config preserves local/remote names' || return 1
-  ! /usr/bin/grep -R -q 'p%40ss\|test:secret' "$root/Library" "$root/usr" || return 1
+  ! /usr/bin/grep -R -q 'p%40ss\|test:secret' "$root/Library" || return 1
   mode_launch=$(/usr/bin/stat -f '%Lp' "$root/Library/LaunchDaemons")
   mode_sbin=$(/usr/bin/stat -f '%Lp' "$root/usr/local/sbin")
   assert_eq 755 "$mode_launch" 'LaunchDaemons parent mode changed' || return 1
-  assert_eq 755 "$mode_sbin" 'sbin parent mode changed' || return 1
+  assert_eq 775 "$mode_sbin" 'Homebrew sbin parent mode changed' || return 1
+  assert_eq 'homebrew-owned sentinel' "$(/bin/cat "$root/usr/local/sbin/homebrew-owned")" 'Homebrew-owned content changed' || return 1
+  homebrew_entry_count=$(/usr/bin/find "$root/usr/local/sbin" -mindepth 1 -maxdepth 1 | /usr/bin/wc -l | /usr/bin/tr -d ' ')
+  assert_eq 1 "$homebrew_entry_count" 'Homebrew-owned directory contents changed' || return 1
   /usr/bin/grep -q 'bootstrap system' "$root/actions" || return 1
   temporary_disable_line=$(/usr/bin/grep -n '^disable system/com.antoinemenard.mount-watchdog$' "$root/actions" | /usr/bin/head -1 | /usr/bin/cut -d: -f1)
   enable_line=$(/usr/bin/grep -n '^enable system/com.antoinemenard.mount-watchdog$' "$root/actions" | /usr/bin/head -1 | /usr/bin/cut -d: -f1)
@@ -290,7 +296,7 @@ test_install_preserves_parent_modes_and_strips_credentials() {
   [ -f "$root/var/log/mount-watchdog.log" ] || return 1
   version=$(/usr/bin/tr -d '\r\n' < "$PROJECT_DIR/VERSION")
   /usr/bin/grep -q "Installed version: $version" "$TEST_TMP/${root##*/}-install-output" || return 1
-  /usr/bin/grep -q 'Next read-only verification: sudo /usr/local/sbin/mount_watchdog_status.sh --status' "$TEST_TMP/${root##*/}-install-output" || return 1
+  /usr/bin/grep -Fq "Next read-only verification: sudo /bin/bash '/Library/Application Support/MountWatchdog/status.sh' --status" "$TEST_TMP/${root##*/}-install-output" || return 1
 
   backup_count_before=$(/usr/bin/find "$root/Library/Application Support/MountWatchdog/backups" -mindepth 1 -maxdepth 1 -type d | /usr/bin/wc -l | /usr/bin/tr -d ' ')
   run_install "$root" Media Studio || return 1
@@ -587,7 +593,7 @@ test_symlinked_root_and_destination_are_rejected() {
   assert_file_absent "$root_etc/Library" || return 1
 
   root_parent=$(new_root nondirectory-parent)
-  printf 'not a directory\n' > "$root_parent/usr"
+  printf 'not a directory\n' > "$root_parent/var"
   if run_install "$root_parent" --dry-run Media; then return 1; fi
   /usr/bin/grep -q 'unsafe privileged parent in installation plan' "$TEST_TMP/${root_parent##*/}-install-output" || return 1
 
@@ -1247,7 +1253,7 @@ run_test 'privileged entrypoints reject untrusted repository sources before sour
 run_test 'ACL policy rejects allow entries and accepts canonical deny-only sources' test_acl_policy_rejects_allow_entries_and_accepts_deny_only_sources
 run_test 'managed install and backup nodes are ACL-free and existing ACLs fail closed' test_managed_nodes_are_acl_free_and_existing_acl_fails_closed
 run_test 'staged VERSION and rendered plist require their exact safe schemas' test_staged_version_and_plist_schema_are_strict
-run_test 'staging install preserves parent modes credentials and noncolliding backup manifests' test_install_preserves_parent_modes_and_strips_credentials
+run_test 'staging install preserves Homebrew-owned paths parent modes credentials and noncolliding backups' test_install_preserves_parent_modes_and_strips_credentials
 run_test 'post-replacement failure restores prior files and exact mode' test_failed_replace_rolls_back_files_and_modes
 run_test 'installer rollback and commit signals have deterministic nonreentrant outcomes' test_installer_transaction_signals_are_nonreentrant
 run_test 'installer rollback distinguishes bootout failure before and after effect' test_installer_bootout_failures_track_actual_loaded_state

@@ -6,7 +6,7 @@ These instructions apply to this repository.
 
 MountWatchdog is a small macOS autofs/SMB metadata monitor, not an SMB client, content-health checker, or general daemon framework.
 
-- Do not run `sudo`, a live installer or uninstaller, the runtime wrapper, mutating `launchctl`, `umount`, `automount`, a NAS probe, or a reboot/outage test during repository development.
+- Do not run `sudo`, a live installer or uninstaller, the installed runtime, mutating `launchctl`, `umount`, `automount`, a NAS probe, or a reboot/outage test during repository development.
 - Do not modify live autofs maps, SMB credentials, Keychain, TCC, SIP, installed watchdog files, system state, or managed mount contents.
 - Never read, enumerate, `stat`, test, create, or remove content at a managed mount path as an automatic health check or mount trigger.
 - Never force-unmount or add a hidden force fallback. A normal unmount is still a live mutation and belongs only in an explicitly authorized recovery path.
@@ -18,7 +18,7 @@ MountWatchdog is a small macOS autofs/SMB metadata monitor, not an SMB client, c
 
 Target macOS `/bin/bash` 3.2 and native system tools. Do not add Bash 4/5-only syntax or a Homebrew runtime dependency. Keep command effects behind explicit adapters so fixture tests cannot fall through to absolute production executables.
 
-The maintained runtime is `mount_watchdog.sh`. The compatibility wrapper runs ticks only. Read-only diagnostics must use `mount_watchdog_status.sh` and must not create state, probe the network, or take recovery actions.
+The maintained runtime is `mount_watchdog.sh`, installed as `watchdog.sh`. Read-only diagnostics must use `mount_watchdog_status.sh`, installed as `status.sh`, and must not create state, probe the network, or take recovery actions.
 
 Keep public examples fictional and credential-free. Do not copy live maps, logs, state, backups, host addresses, or older credential-bearing scripts into the repository.
 

@@ -12,8 +12,6 @@ export LC_ALL
 MW_LABEL='com.antoinemenard.mount-watchdog'
 MW_APP='/Library/Application Support/MountWatchdog'
 MW_PLIST="/Library/LaunchDaemons/$MW_LABEL.plist"
-MW_RUNTIME_WRAPPER='/usr/local/sbin/mount_watchdog.sh'
-MW_STATUS_WRAPPER='/usr/local/sbin/mount_watchdog_status.sh'
 MW_LOG='/var/log/mount-watchdog.log'
 
 mw_uninstaller_dir=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd -P) || {
@@ -408,7 +406,7 @@ mw_acquire_lifecycle_lock || mw_die 'lifecycle operation lock is busy, stale, or
 MW_ALLOWED=(
   "$MW_APP/watchdog.sh" "$MW_APP/status.sh" "$MW_APP/lib/common.sh"
   "$MW_APP/lib/runtime.sh" "$MW_APP/lib/autofs.sh" "$MW_APP/defaults.conf" "$MW_APP/mounts.conf"
-  "$MW_APP/VERSION" "$MW_PLIST" "$MW_RUNTIME_WRAPPER" "$MW_STATUS_WRAPPER"
+  "$MW_APP/VERSION" "$MW_PLIST"
 )
 MW_REMOVE=()
 mw_manifest=$(mw_dest "$MW_APP/install-manifest.tsv") || mw_die 'cannot resolve installed manifest'
@@ -980,7 +978,7 @@ mw_manifest=$(mw_dest "$MW_APP/install-manifest.tsv") || mw_die 'cannot resolve 
 MW_ALLOWED=(
   "$MW_APP/watchdog.sh" "$MW_APP/status.sh" "$MW_APP/lib/common.sh"
   "$MW_APP/lib/runtime.sh" "$MW_APP/lib/autofs.sh" "$MW_APP/defaults.conf" "$MW_APP/mounts.conf"
-  "$MW_APP/VERSION" "$MW_PLIST" "$MW_RUNTIME_WRAPPER" "$MW_STATUS_WRAPPER"
+  "$MW_APP/VERSION" "$MW_PLIST"
 )
 MW_REMOVE=()
 mw_tab=$(printf '\tX'); mw_tab=${mw_tab%X}
@@ -1006,8 +1004,7 @@ MW_REMOVE[${#MW_REMOVE[@]}]="$MW_APP/install-manifest.tsv"
 if [ -z "$mw_root" ]; then
   for mw_owned_parent in \
     "$(mw_dest "$MW_APP")" "$(mw_dest "$MW_APP/lib")" \
-    "$(dirname -- "$(mw_dest "$MW_PLIST")")" \
-    "$(dirname -- "$(mw_dest "$MW_RUNTIME_WRAPPER")")"; do
+    "$(dirname -- "$(mw_dest "$MW_PLIST")")"; do
     if ! mw_check_path "$mw_owned_parent" || ! mw_live_safe_owned "$mw_owned_parent"; then
       mw_die "unsafe privileged parent: $mw_owned_parent"
     fi

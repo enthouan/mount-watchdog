@@ -12,8 +12,6 @@ export LC_ALL
 MW_LABEL='com.antoinemenard.mount-watchdog'
 MW_APP='/Library/Application Support/MountWatchdog'
 MW_PLIST="/Library/LaunchDaemons/$MW_LABEL.plist"
-MW_RUNTIME_WRAPPER='/usr/local/sbin/mount_watchdog.sh'
-MW_STATUS_WRAPPER='/usr/local/sbin/mount_watchdog_status.sh'
 MW_LOG='/var/log/mount-watchdog.log'
 
 mw_installer_dir=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd -P) || {
@@ -305,9 +303,7 @@ for mw_source in \
   "$mw_installer_dir/lib/autofs.sh" \
   "$mw_installer_dir/config/defaults.conf" \
   "$mw_installer_dir/VERSION" \
-  "$mw_installer_dir/packaging/com.antoinemenard.mount-watchdog.plist.in" \
-  "$mw_installer_dir/packaging/runtime-wrapper.sh" \
-  "$mw_installer_dir/packaging/status-wrapper.sh"; do
+  "$mw_installer_dir/packaging/com.antoinemenard.mount-watchdog.plist.in"; do
   mw_repo_file_is_trusted "$mw_source" || mw_die "required source missing or untrusted: $mw_source"
 done
 mw_parse_defaults "$mw_installer_dir/config/defaults.conf" || exit 1
@@ -317,18 +313,15 @@ mw_parse_defaults "$mw_installer_dir/config/defaults.conf" || exit 1
 mw_app=$(mw_dest "$MW_APP") || mw_die 'cannot resolve app dir'
 mw_backups=$(mw_dest "$MW_APP/backups") || mw_die 'cannot resolve backups'
 mw_plist=$(mw_dest "$MW_PLIST") || mw_die 'cannot resolve plist'
-mw_runtime_wrapper=$(mw_dest "$MW_RUNTIME_WRAPPER") || mw_die 'cannot resolve wrapper'
-mw_status_wrapper=$(mw_dest "$MW_STATUS_WRAPPER") || mw_die 'cannot resolve status wrapper'
 mw_log=$(mw_dest "$MW_LOG") || mw_die 'cannot resolve log path'
 mw_installed_manifest_path=$(mw_dest "$MW_APP/install-manifest.tsv") || mw_die 'cannot resolve installed manifest'
 
 MW_OWNED_PATHS=(
   "$MW_APP/watchdog.sh" "$MW_APP/status.sh" "$MW_APP/lib/common.sh"
   "$MW_APP/lib/runtime.sh" "$MW_APP/lib/autofs.sh" "$MW_APP/defaults.conf" "$MW_APP/mounts.conf"
-  "$MW_APP/VERSION" "$MW_PLIST" "$MW_RUNTIME_WRAPPER" "$MW_STATUS_WRAPPER"
+  "$MW_APP/VERSION" "$MW_PLIST"
 )
-for mw_path in "$mw_app" "$mw_backups" "$mw_plist" \
-  "$mw_runtime_wrapper" "$mw_status_wrapper" "$mw_log" "$mw_installed_manifest_path"; do
+for mw_path in "$mw_app" "$mw_backups" "$mw_plist" "$mw_log" "$mw_installed_manifest_path"; do
   mw_require_safe_path "$mw_path"
 done
 for mw_logical in "${MW_OWNED_PATHS[@]}"; do
@@ -338,9 +331,6 @@ done
 mw_library=$(mw_dest /Library) || mw_die 'cannot resolve /Library'
 mw_application_support=$(mw_dest '/Library/Application Support') || mw_die 'cannot resolve Application Support'
 mw_launchdaemons=$(mw_dest /Library/LaunchDaemons) || mw_die 'cannot resolve LaunchDaemons'
-mw_usr=$(mw_dest /usr) || mw_die 'cannot resolve /usr'
-mw_usr_local=$(mw_dest /usr/local) || mw_die 'cannot resolve /usr/local'
-mw_usr_local_sbin=$(mw_dest /usr/local/sbin) || mw_die 'cannot resolve /usr/local/sbin'
 mw_var=$(mw_dest /var) || mw_die 'cannot resolve /var'
 mw_var_log=$(mw_dest /var/log) || mw_die 'cannot resolve /var/log'
 mw_lib=$(mw_dest "$MW_APP/lib") || mw_die 'cannot resolve installed library dir'
@@ -367,7 +357,7 @@ mw_preflight_managed_dir() {
     fi
   fi
 }
-for mw_parent in "$mw_library" "$mw_application_support" "$mw_launchdaemons" "$mw_usr" "$mw_usr_local" "$mw_usr_local_sbin" "$mw_var" "$mw_var_log"; do
+for mw_parent in "$mw_library" "$mw_application_support" "$mw_launchdaemons" "$mw_var" "$mw_var_log"; do
   mw_preflight_parent "$mw_parent" || mw_die "unsafe privileged parent in installation plan: $mw_parent"
 done
 for mw_managed in "$mw_app" "$mw_backups" "$mw_lib"; do
@@ -543,7 +533,7 @@ mw_stage_dir=$(/usr/bin/mktemp -d "$mw_stage_parent/mountwatchdog.install.XXXXXX
 mw_strip_acl_from_new_node "$mw_stage_dir" || mw_die 'cannot normalize private staging directory ACL'
 mw_cleanup() {
   [ -n "$mw_stage_dir" ] && [ -d "$mw_stage_dir" ] || return 0
-  for mw_cleanup_name in watchdog.sh status.sh common.sh runtime.sh autofs.sh defaults.conf VERSION runtime-wrapper.sh status-wrapper.sh mounts.conf launchd.plist install-manifest.tsv mount-watchdog.log; do
+  for mw_cleanup_name in watchdog.sh status.sh common.sh runtime.sh autofs.sh defaults.conf VERSION mounts.conf launchd.plist install-manifest.tsv mount-watchdog.log; do
     [ ! -e "$mw_stage_dir/$mw_cleanup_name" ] || /bin/rm -f -- "$mw_stage_dir/$mw_cleanup_name"
   done
   /bin/rmdir "$mw_stage_dir" 2>/dev/null || true
@@ -576,10 +566,8 @@ trap 'mw_die "installation interrupted"' HUP INT TERM QUIT
 /bin/cp "$mw_installer_dir/lib/autofs.sh" "$mw_stage_dir/autofs.sh" || mw_die 'cannot stage autofs library'
 /bin/cp "$mw_installer_dir/config/defaults.conf" "$mw_stage_dir/defaults.conf" || mw_die 'cannot stage defaults'
 /bin/cp "$mw_installer_dir/VERSION" "$mw_stage_dir/VERSION" || mw_die 'cannot stage version'
-/bin/cp "$mw_installer_dir/packaging/runtime-wrapper.sh" "$mw_stage_dir/runtime-wrapper.sh" || mw_die 'cannot stage wrapper'
-/bin/cp "$mw_installer_dir/packaging/status-wrapper.sh" "$mw_stage_dir/status-wrapper.sh" || mw_die 'cannot stage status wrapper'
 : > "$mw_stage_dir/mount-watchdog.log" || mw_die 'cannot stage log file'
-for mw_staged_leaf in watchdog.sh status.sh common.sh runtime.sh autofs.sh defaults.conf VERSION runtime-wrapper.sh status-wrapper.sh mount-watchdog.log; do
+for mw_staged_leaf in watchdog.sh status.sh common.sh runtime.sh autofs.sh defaults.conf VERSION mount-watchdog.log; do
   mw_strip_acl_from_new_node "$mw_stage_dir/$mw_staged_leaf" || mw_die "cannot normalize staged artifact ACL: $mw_staged_leaf"
 done
 
@@ -605,7 +593,7 @@ done
 mw_strip_acl_from_new_node "$mw_stage_dir/mounts.conf" || mw_die 'cannot normalize staged config ACL'
 mw_strip_acl_from_new_node "$mw_stage_dir/launchd.plist" || mw_die 'cannot normalize staged plist ACL'
 
-for mw_script in watchdog.sh status.sh common.sh runtime.sh autofs.sh runtime-wrapper.sh status-wrapper.sh; do
+for mw_script in watchdog.sh status.sh common.sh runtime.sh autofs.sh; do
   /bin/bash -n "$mw_stage_dir/$mw_script" || mw_die "syntax validation failed: $mw_script"
 done
 mw_parse_config "$mw_stage_dir/mounts.conf" || mw_die 'generated config validation failed'
@@ -853,7 +841,7 @@ mw_ensure_managed_dir() {
   fi
 }
 
-for mw_parent in "$mw_library" "$mw_application_support" "$mw_launchdaemons" "$mw_usr" "$mw_usr_local" "$mw_usr_local_sbin" "$mw_var" "$mw_var_log"; do
+for mw_parent in "$mw_library" "$mw_application_support" "$mw_launchdaemons" "$mw_var" "$mw_var_log"; do
   mw_ensure_parent_dir "$mw_parent" 755 || mw_die "unsafe or unavailable privileged parent: $mw_parent"
 done
 mw_ensure_managed_dir "$mw_app" 700 || mw_die 'cannot create app dir'
@@ -907,7 +895,7 @@ MW_INSTALL_PATHS=(
   "$MW_APP/watchdog.sh" "$MW_APP/status.sh" "$MW_APP/lib/common.sh"
   "$MW_APP/lib/runtime.sh" "$MW_APP/lib/autofs.sh" "$MW_APP/defaults.conf" "$MW_APP/mounts.conf"
   "$MW_APP/VERSION" "$MW_APP/install-manifest.tsv" "$MW_PLIST"
-  "$MW_RUNTIME_WRAPPER" "$MW_STATUS_WRAPPER" "$MW_LOG"
+  "$MW_LOG"
 )
 for mw_logical in "${MW_INSTALL_PATHS[@]}"; do mw_backup_one "$mw_logical" || mw_die "backup failed: $mw_logical"; done
 
@@ -918,8 +906,7 @@ for mw_pair in \
   "common.sh|$MW_APP/lib/common.sh" "runtime.sh|$MW_APP/lib/runtime.sh" \
   "autofs.sh|$MW_APP/lib/autofs.sh" \
   "defaults.conf|$MW_APP/defaults.conf" "mounts.conf|$MW_APP/mounts.conf" \
-  "VERSION|$MW_APP/VERSION" "launchd.plist|$MW_PLIST" \
-  "runtime-wrapper.sh|$MW_RUNTIME_WRAPPER" "status-wrapper.sh|$MW_STATUS_WRAPPER"; do
+  "VERSION|$MW_APP/VERSION" "launchd.plist|$MW_PLIST"; do
   mw_file=${mw_pair%%|*}; mw_logical=${mw_pair#*|}
   mw_sha=$(mw_file_sha "$mw_stage_dir/$mw_file") || mw_die 'cannot hash artifact'
   printf 'file\t%s\t%s\n' "$mw_logical" "$mw_sha" >> "$mw_installed_manifest" || mw_die 'cannot write installed manifest'
@@ -1136,8 +1123,6 @@ mw_replace_file "$mw_stage_dir/mounts.conf" "$(mw_dest "$MW_APP/mounts.conf")" 6
 mw_replace_file "$mw_stage_dir/VERSION" "$(mw_dest "$MW_APP/VERSION")" 600 || mw_die 'cannot install version'
 mw_replace_file "$mw_installed_manifest" "$(mw_dest "$MW_APP/install-manifest.tsv")" 600 || mw_die 'cannot install manifest'
 mw_replace_file "$mw_stage_dir/launchd.plist" "$mw_plist" 600 || mw_die 'cannot install plist'
-mw_replace_file "$mw_stage_dir/runtime-wrapper.sh" "$mw_runtime_wrapper" 755 || mw_die 'cannot install wrapper'
-mw_replace_file "$mw_stage_dir/status-wrapper.sh" "$mw_status_wrapper" 755 || mw_die 'cannot install status wrapper'
 if [ -e "$mw_log" ]; then
   [ -f "$mw_log" ] && [ ! -L "$mw_log" ] || mw_die 'existing log path is not a regular file'
   [ -n "$mw_root" ] || mw_validate_live_regular "$mw_log" || mw_die 'existing log must be root-owned and non-writable'
@@ -1196,6 +1181,6 @@ elif [ "$mw_prior_plist_present" -eq 1 ] && [ "$mw_prior_loaded" -eq 0 ] && [ "$
 else
   printf 'The canonical job registered; this does not prove SMB readability.\n'
 fi
-printf 'Next read-only verification: sudo /usr/local/sbin/mount_watchdog_status.sh --status\n'
+printf "Next read-only verification: sudo /bin/bash '/Library/Application Support/MountWatchdog/status.sh' --status\n"
 printf 'Protected backup: %s\n' "$mw_backup_dir"
 printf 'Post-success rollback dry-run: sudo /bin/bash ./uninstall_mount_watchdog.sh --dry-run rollback %s\n' "${mw_backup_dir##*/}"

@@ -70,7 +70,6 @@ The installation uses these locations:
 /var/run/com.antoinemenard.mount-watchdog/heartbeat
 /var/run/com.antoinemenard.mount-watchdog/<name>/status
 /var/log/mount-watchdog.log
-/usr/local/sbin/mount_watchdog.sh
 ```
 
 The maintained implementation adds these installed artifacts and explicit state/lock leaves:
@@ -83,7 +82,6 @@ The maintained implementation adds these installed artifacts and explicit state/
 /Library/Application Support/MountWatchdog/defaults.conf
 /Library/Application Support/MountWatchdog/VERSION
 /Library/Application Support/MountWatchdog/install-manifest.tsv
-/usr/local/sbin/mount_watchdog_status.sh
 /var/run/com.antoinemenard.mount-watchdog/blocked-command
 /var/run/com.antoinemenard.mount-watchdog/autofs-refresh
 /var/run/com.antoinemenard.mount-watchdog/.tick.lock/
@@ -93,7 +91,9 @@ The maintained implementation adds these installed artifacts and explicit state/
 
 `/var/run` resolves through macOS's trusted `/var -> private/var` alias. The volatile tick lock and durable action records belong to runtime recovery; the `/private/var/db` lifecycle lock serializes installer and uninstaller mutations. They have different recovery rules; see [Troubleshooting](docs/troubleshooting.md) and [Lifecycle and rollback](docs/lifecycle-and-rollback.md).
 
-The runtime wrapper runs a normal tick. It is not a status command and must not be invoked merely to inspect an installation.
+MountWatchdog installs nothing beneath `/usr/local` or `/opt/homebrew`. This keeps both Intel Homebrew's customary `/usr/local` prefix and Apple Silicon Homebrew's customary `/opt/homebrew` prefix outside its ownership and validation boundary. Launchd invokes the canonical root-owned runtime under `/Library/Application Support/MountWatchdog` directly.
+
+The installed `watchdog.sh` runs a normal tick. It is not a status command and must not be invoked merely to inspect an installation.
 
 ## Safe local validation
 
@@ -105,15 +105,15 @@ From this directory, the canonical nonprivileged check is:
 
 The test command syntax-checks maintained shell sources, validates generated artifacts when available, and runs fixture tests without `sudo`, live mounts, launchd mutation, system-directory writes, or NAS access. See [Testing](docs/testing.md) for evidence boundaries and the direct harness command.
 
-Read-only installed diagnostics are provided by the dedicated wrapper; established root-only file modes require the owner to run:
+Read-only installed diagnostics are provided by the dedicated status script; established root-only file modes require the owner to run:
 
 ```bash
-sudo /usr/local/sbin/mount_watchdog_status.sh --status
+sudo /bin/bash '/Library/Application Support/MountWatchdog/status.sh' --status
 ```
 
 Read-only means it performs no tick, state creation, TCP probe, unmount, refresh, or service mutation.
 
-The periodic wrapper also has an explicit, state-mutating owner command for a narrow class of resolved manual-attention latches. It is not a diagnostic shortcut; follow the review and eligibility procedure in [Troubleshooting](docs/troubleshooting.md) before using `--acknowledge-manual-attention`.
+The installed runtime also has an explicit, state-mutating owner command for a narrow class of resolved manual-attention latches. It is not a diagnostic shortcut; follow the review and eligibility procedure in [Troubleshooting](docs/troubleshooting.md) before using `--acknowledge-manual-attention`.
 
 Before considering an owner-authorized deployment, review [Configuration](docs/configuration.md), [Lifecycle and rollback](docs/lifecycle-and-rollback.md), [Troubleshooting](docs/troubleshooting.md), and the [Roadmap](docs/roadmap.md). Always inspect each lifecycle script's `--help` output before running it.
 

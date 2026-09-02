@@ -1,11 +1,11 @@
 # Troubleshooting
 
-Use the dedicated status command for observation. Never invoke `/usr/local/sbin/mount_watchdog.sh` merely to inspect a machine: that compatibility wrapper runs a normal tick and can enter recovery logic.
+Use the dedicated status command for observation. Never invoke the installed `watchdog.sh` merely to inspect a machine: it runs a normal tick and can enter recovery logic.
 
-For an installed copy, use the dedicated installed status wrapper:
+For an installed copy, use the dedicated installed status script:
 
 ```bash
-sudo /usr/local/sbin/mount_watchdog_status.sh --status
+sudo /bin/bash '/Library/Application Support/MountWatchdog/status.sh' --status
 ```
 
 The maintained status source intentionally rejects a noncanonical production path, so invoking the repository copy directly is not an installed-machine diagnostic. `sudo` may be necessary only because the established installed config and state paths are root-readable. The status implementation itself is read-only: it must not create state, contact port 445, unmount, refresh autofs, start/stop launchd, or run a tick.
@@ -58,7 +58,7 @@ The global `autofs-refresh` record has separate semantics. `attempting/unknown` 
 
 ### Missing or stale heartbeat
 
-First determine whether the LaunchDaemon is registered and whether the heartbeat belongs to the installed version. A missing state file immediately after reboot can mean the first tick has not completed; it is not by itself proof of an SMB outage. Do not invoke the runtime wrapper to manufacture a fresh heartbeat during diagnosis.
+First determine whether the LaunchDaemon is registered and whether the heartbeat belongs to the installed version. A missing state file immediately after reboot can mean the first tick has not completed; it is not by itself proof of an SMB outage. Do not invoke the installed runtime to manufacture a fresh heartbeat during diagnosis.
 
 ### Expected mount is not present
 
@@ -81,7 +81,7 @@ A failed `automount -c` is an action error, not a successful remount. The comman
 Run the read-only status command first and investigate the recorded error. After the cause is resolved, the installed runtime exposes one explicit owner action:
 
 ```bash
-sudo /usr/local/sbin/mount_watchdog.sh --acknowledge-manual-attention
+sudo /bin/bash '/Library/Application Support/MountWatchdog/watchdog.sh' --acknowledge-manual-attention
 ```
 
 This is not a general reset. It refuses configuration drift, active/unverifiable command evidence, durable unmount journals, unsafe or stale-input state, unexpected/ambiguous mount layers, and error reasons outside its reviewed allowlist. It takes one read-only mount-table snapshot but performs no TCP probe, mount-path access, unmount, autofs refresh, or service mutation. It preserves attempt/success history, marks eligible latches idle, records a pending heartbeat, and leaves normal observation to the next scheduled tick. Run status again after that tick; if the command refuses, preserve the evidence rather than deleting files.
