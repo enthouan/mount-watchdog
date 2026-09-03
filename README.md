@@ -2,7 +2,7 @@
 
 MountWatchdog is a small macOS `autofs`/SMB mount-state monitor and conservative recovery helper. It manages only mount names selected by the operator and leaves the existing autofs maps in charge of credentials and on-demand mounting.
 
-This tree is version `0.1.0-dev`. It is unreleased, has not been production-validated, and is not deployment-ready. The development baseline includes fixture-tested post-success rollback, narrow owner acknowledgment for resolved `manual-attention` latches, and a fail-closed macOS ACL policy. Exact-candidate review, remaining synthetic gaps, live target inventory, native lifecycle/recovery validation, and the other items in the [Roadmap](docs/roadmap.md) still block deployment. Building or testing the repository does not authorize installing it on a Mac, restarting a service, unmounting a share, or changing autofs.
+This tree is version `0.1.0`. It has not been production-validated and is not deployment-ready. The initial release includes fixture-tested post-success rollback, narrow owner acknowledgment for resolved `manual-attention` latches, and a fail-closed macOS ACL policy. Exact-candidate review, remaining synthetic gaps, live target inventory, native lifecycle/recovery validation, and the other items in the [Roadmap](docs/roadmap.md) still block deployment. Building or testing the repository does not authorize installing it on a Mac, restarting a service, unmounting a share, or changing autofs.
 
 ## What it can observe
 
@@ -121,4 +121,4 @@ Before considering an owner-authorized deployment, review [Configuration](docs/c
 
 MountWatchdog is available under the [MIT License](LICENSE).
 
-No public release, compatibility guarantee, successful CI run, or production recovery claim is implied by this development tree.
+Version `0.1.0` carries no compatibility guarantee or production-recovery claim. Passing CI establishes only the fixture-tested behavior described above.

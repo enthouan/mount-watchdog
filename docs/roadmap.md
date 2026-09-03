@@ -1,6 +1,6 @@
 # Roadmap
 
-MountWatchdog should remain a small native utility. This roadmap distinguishes the implemented development baseline from evidence and lifecycle work that still blocks a release candidate.
+MountWatchdog should remain a small native utility. This roadmap distinguishes the initial public release from evidence and lifecycle work that still blocks production validation.
 
 ## Implemented development baseline
 
@@ -10,18 +10,18 @@ MountWatchdog should remain a small native utility. This roadmap distinguishes t
 - Committed install backups are bound to the resulting maintained manifest and can be consumed by an exact-ID post-success rollback. Resolved allowlisted manual-attention latches have an explicit owner action that performs only a read-only mount-table snapshot before state acknowledgment. Canonical deny-only ACLs are accepted on protected/source ancestors, while managed nodes are ACL-free and all allow/noncanonical ACLs fail closed.
 - Public examples are fictional and credential-free; the runtime contains no intentional content probe, synthetic mount trigger, or forced-unmount fallback.
 
-## Release blockers
+## Production-validation blockers
 
 - Define an owner-reviewed inspection and recovery procedure for stale lifecycle locks, incomplete runtime locks, unsafe temporary residue, and other retained fail-closed evidence. Automatic cleanup is intentionally limited to exact trusted cases.
 - Design and review a strictly allowlisted command-diagnostic detail field if numeric exit status plus semantic error categories are insufficient; never persist raw stderr that may contain paths, sources, or credentials.
 - Close the material synthetic gaps listed in [Testing](testing.md), or record an explicit owner acceptance for each gap after exact-candidate review.
-- Review the exact rollback, acknowledgment, and ACL implementation as part of the release candidate and validate those paths on the target macOS release. Fixture behavior is not native lifecycle evidence.
-- Run and record the final local suite on macOS `/bin/bash` 3.2, inspect the exact diff, and obtain actual hosted CI results. A checked-in workflow alone is not CI evidence.
+- Review the exact rollback, acknowledgment, and ACL implementation before production validation and validate those paths on the target macOS release. Fixture behavior is not native lifecycle evidence.
+- For each candidate, run and record the final local suite on macOS `/bin/bash` 3.2, inspect the exact diff, and obtain actual hosted CI results. A checked-in workflow alone is not CI evidence.
 - Inspect each target Mac's installed checksums, plist/job definition, enabled/loaded state, selected metadata, and provenance. Resolve any unmanaged installation outside this repository before using the maintained installer.
 - Complete the owner-authorized native acceptance checks below before calling the utility production-validated.
-- Obtain owner decisions before deployment, publication, or release.
+- Obtain an owner decision before deployment, publication, or release.
 
-## Owner-authorized release-candidate checks
+## Owner-authorized production acceptance checks
 
 After the repository gates pass, use a controlled maintenance window to validate launchd registration/disabled-state behavior, reboot-created state, periodic scheduling, one approved outage/return transition, sleep/wake heuristic reporting, busy normal-unmount handling, and the owner's manual application access after recovery. These checks cannot be replaced by CI and are not authorized by repository implementation alone.
 

@@ -2,9 +2,9 @@
 
 This document describes the reviewed installer, upgrade, rollback, and removal lifecycle. Repository implementation and fixture testing do not authorize deployment, service interruption, unmounting, map changes, or outage/reboot tests.
 
-Version `0.1.0-dev` is unreleased and not production-validated. Use only the maintained lifecycle scripts at the repository root.
+Version `0.1.0` is the initial public release and is not production-validated. Use only the maintained lifecycle scripts at the repository root.
 
-> **Do not deploy `0.1.0-dev` to a production Mac.** Neither target Mac has been inventoried against this exact candidate, and no native install, rollback, reboot, scheduling, or controlled-recovery acceptance has been recorded. Consult the [Roadmap](roadmap.md). The commands below describe the intended owner-run lifecycle after those gates are resolved and separately authorized.
+> **Do not deploy `0.1.0` to a production Mac.** Neither target Mac has been inventoried against this exact candidate, and no native install, rollback, reboot, scheduling, or controlled-recovery acceptance has been recorded. Consult the [Roadmap](roadmap.md). The commands below describe the intended owner-run lifecycle after those gates are resolved and separately authorized.
 
 ## Before deployment
 

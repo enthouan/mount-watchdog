@@ -1284,6 +1284,18 @@ done
 [ -f "$FIXTURE/mount-command.pid" ] || fail 'crash fixture did not start the guarded command'
 IFS= read -r CRASH_GROUP < "$FIXTURE/mount-command.pid"
 case "$CRASH_GROUP" in ''|*[!0-9]*) fail 'crash fixture recorded an invalid group' ;; esac
+CRASH_GUARD_WAIT=0
+while [ "$CRASH_GUARD_WAIT" -lt 50 ]; do
+  if [ -f "$FIXTURE/state/.tick.lock/command-guard" ] &&
+    /usr/bin/grep -Fqx 'active|1' "$FIXTURE/state/.tick.lock/command-guard" &&
+    /usr/bin/grep -Fqx "pid|$CRASH_GROUP" "$FIXTURE/state/.tick.lock/command-guard" &&
+    /usr/bin/grep -Fqx "pgid|$CRASH_GROUP" "$FIXTURE/state/.tick.lock/command-guard"; then
+    break
+  fi
+  /bin/sleep 0.1
+  CRASH_GUARD_WAIT=$((CRASH_GUARD_WAIT + 1))
+done
+[ "$CRASH_GUARD_WAIT" -lt 50 ] || fail 'crash fixture did not observe a finalized command guard'
 BLOCK_PGID=$CRASH_GROUP
 kill -KILL "$SIGNAL_RUNTIME_PID" || fail 'could not kill the staging supervisor'
 wait "$SIGNAL_RUNTIME_PID" 2>/dev/null
