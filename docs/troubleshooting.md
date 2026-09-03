@@ -90,7 +90,7 @@ This is not a general reset. It refuses configuration drift, active/unverifiable
 
 The runtime tick lock is `/var/run/com.antoinemenard.mount-watchdog/.tick.lock`. A trustworthy live owner or live command guard prevents overlap. A later tick can reclaim a complete, trusted dead-owner lock only after proving that no guarded process group remains; an absent or malformed owner, unsafe metadata, or unverifiable live group fails closed before heartbeat or observation. Do not remove this directory based only on a stale-looking PID.
 
-`/private/var/db/MountWatchdog.lifecycle.lock` is different: it serializes installer and uninstaller mutations and is never auto-reclaimed. A lifecycle lock left by `SIGKILL` or power loss requires owner inspection of the interrupted transaction and protected backup evidence. Neither lock is cleared by runtime owner acknowledgment, and version `0.1.0-dev` still has no general manual-reset command.
+`/private/var/db/MountWatchdog.lifecycle.lock` is different: it serializes installer and uninstaller mutations and is never auto-reclaimed. A lifecycle lock left by `SIGKILL` or power loss requires owner inspection of the interrupted transaction and protected backup evidence. Neither lock is cleared by runtime owner acknowledgment, and version `0.1.0` still has no general manual-reset command.
 
 ### Unexpected source or filesystem
 
