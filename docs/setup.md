@@ -10,7 +10,20 @@ Use a macOS host with Apple `/bin/bash` 3.2 and an existing autofs configuration
 - `/etc/auto_smb` contains exactly one supported SMB record for every mount you intend to select; and
 - each selected target is `/Users/<current-user>/<mount-name>`.
 
-For example, selecting `Archive` for a user named `example` requires an existing mapping for `/Users/example/Archive`. Local mount names and remote SMB share names may differ. Do not print, copy, or paste a real map record because historical maps may contain credentials.
+A fictional configuration for the user `example` and the mount names `Archive` and `Studio` looks like this. The first block is only the relevant line in `/etc/auto_master`, not a replacement for the rest of that system file:
+
+```text
+/- /etc/auto_smb
+```
+
+The corresponding `/etc/auto_smb` records use absolute local paths:
+
+```text
+/Users/example/Archive -fstype=smb,soft,noowners,nosuid ://192.0.2.10/Vault
+/Users/example/Studio -fstype=smbfs,soft,noowners,nosuid ://198.51.100.20/Workspace
+```
+
+Replace `example` with the output of `/usr/bin/whoami`. The final path components must match the mount names passed to the installer. Local mount names and remote SMB share names may differ: the example maps `Archive` to `Vault` and `Studio` to `Workspace`. The addresses are reserved TEST-NET examples and must not be contacted. Do not print, copy, or paste a real map record because historical maps may contain credentials.
 
 MountWatchdog validates the complete map before installation. It fails closed on unsupported records, ambiguous mappings, unsafe metadata, conflicting targets, or an unexpected path instead of changing the maps.
 
