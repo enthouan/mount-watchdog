@@ -4,6 +4,44 @@ MountWatchdog is a small macOS `autofs`/SMB mount-state monitor and conservative
 
 This tree is version `0.1.0`. It has not been production-validated and is not deployment-ready. The initial release includes fixture-tested post-success rollback, narrow owner acknowledgment for resolved `manual-attention` latches, and a fail-closed macOS ACL policy. Exact-candidate review, remaining synthetic gaps, live target inventory, native lifecycle/recovery validation, and the other items in the [Roadmap](docs/roadmap.md) still block deployment. Building or testing the repository does not authorize installing it on a Mac, restarting a service, unmounting a share, or changing autofs.
 
+## Setup
+
+MountWatchdog expects macOS autofs to already provide the SMB mounts you want to monitor. It does not configure autofs or credentials. The supported setup requires an active `/- auto_smb` entry and one compatible `/etc/auto_smb` record for each selected `/Users/<current-user>/<mount-name>` path; review the [detailed setup guide](docs/setup.md) before installing.
+
+Clone and validate the release:
+
+```bash
+git clone https://github.com/enthouan/mount-watchdog.git
+cd mount-watchdog
+git switch --detach v0.1.0
+/bin/bash tests/run.sh
+```
+
+Replace `Archive Studio` with the complete local mount-name set for this Mac, then preview the installation:
+
+```bash
+/bin/bash ./install_mount_watchdog.sh \
+  --dry-run \
+  --local-user "$(/usr/bin/whoami)" \
+  Archive Studio
+```
+
+Only after reviewing that plan and authorizing the live lifecycle change:
+
+```bash
+sudo /bin/bash ./install_mount_watchdog.sh \
+  --local-user "$(/usr/bin/whoami)" \
+  Archive Studio
+```
+
+The invoking shell evaluates `$(/usr/bin/whoami)` before `sudo`, so the installer receives the current macOS user rather than `root`. Verify the result through the installed read-only status command:
+
+```bash
+sudo /bin/bash '/Library/Application Support/MountWatchdog/status.sh' --status
+```
+
+For prerequisites, expected output, upgrades, verification, and rollback, follow [Setup](docs/setup.md). Version `0.1.0` remains experimental and must not be treated as production-validated.
+
 ## What it can observe
 
 The runtime compares the local mount table with credential-free host/share metadata and checks whether the host accepts a TCP connection on port 445. A `mounted-reachable` result therefore means only:

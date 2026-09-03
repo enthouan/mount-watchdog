@@ -4,6 +4,8 @@ This document describes the reviewed installer, upgrade, rollback, and removal l
 
 Version `0.1.0` is the initial public release and is not production-validated. Use only the maintained lifecycle scripts at the repository root.
 
+Start with [Setup](setup.md) for the supported autofs prerequisites and the complete installation path.
+
 > **Do not deploy `0.1.0` to a production Mac.** Neither target Mac has been inventoried against this exact candidate, and no native install, rollback, reboot, scheduling, or controlled-recovery acceptance has been recorded. Consult the [Roadmap](roadmap.md). The commands below describe the intended owner-run lifecycle after those gates are resolved and separately authorized.
 
 ## Before deployment
@@ -29,19 +31,22 @@ The installer accepts selected mount names plus `--local-user USER` and `--dry-r
 A dry-run does not acquire the privileged lifecycle lock, write installed paths, or call mutating launchd operations. Its result is a point-in-time snapshot. An upgrade dry-run may need `sudo` only to inspect the established root-only maintained installation; the later live invocation revalidates everything under the shared root lock.
 
 ```bash
-LOCAL_USER='your-local-user'
-/bin/bash ./install_mount_watchdog.sh --dry-run --local-user "$LOCAL_USER" Archive Studio
+/bin/bash ./install_mount_watchdog.sh \
+  --dry-run \
+  --local-user "$(/usr/bin/whoami)" \
+  Archive Studio
 ```
 
-`Archive` and `Studio` are fictional public examples. Pass exactly the intended selected set for that Mac. `--staging-root EXISTING_NON_SYMLINK_DIR` is a nonprivileged fixture boundary, never a live-install redirection mechanism.
+`Archive` and `Studio` are fictional public examples. Pass exactly the intended selected set for that Mac. The shell evaluates `$(/usr/bin/whoami)` before any later `sudo` invocation, so the installer receives the current macOS username rather than `root`. `--staging-root EXISTING_NON_SYMLINK_DIR` is a nonprivileged fixture boundary, never a live-install redirection mechanism.
 
 ## Fresh install or maintained upgrade
 
 Only after dry-run review and owner approval:
 
 ```bash
-LOCAL_USER='your-local-user'
-sudo /bin/bash ./install_mount_watchdog.sh --local-user "$LOCAL_USER" Archive Studio
+sudo /bin/bash ./install_mount_watchdog.sh \
+  --local-user "$(/usr/bin/whoami)" \
+  Archive Studio
 ```
 
 The installer supports only a fresh destination or an exact manifest-owned maintained installation. Canonical artifacts without the maintained manifest are unmanaged collisions and fail closed; the installer has no adoption or historical-install conversion mode.
