@@ -1,0 +1,16 @@
+# macOS and editor files
+.DS_Store
+*.swp
+*~
+
+# Local configuration and diagnostic output
+.env
+.env.*
+/auto_master
+/auto_smb
+/mounts.conf
+*.bak
+*.log
+
+# Locally rendered packaging artifacts
+/packaging/*.plist

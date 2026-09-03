@@ -19,7 +19,7 @@ MountWatchdog should remain a small native utility. This roadmap distinguishes t
 - Run and record the final local suite on macOS `/bin/bash` 3.2, inspect the exact diff, and obtain actual hosted CI results. A checked-in workflow alone is not CI evidence.
 - Inspect each target Mac's installed checksums, plist/job definition, enabled/loaded state, selected metadata, and provenance. Resolve any unmanaged installation outside this repository before using the maintained installer.
 - Complete the owner-authorized native acceptance checks below before calling the utility production-validated.
-- Obtain owner decisions before deployment, publication, release, or choosing a license.
+- Obtain owner decisions before deployment, publication, or release.
 
 ## Owner-authorized release-candidate checks
 

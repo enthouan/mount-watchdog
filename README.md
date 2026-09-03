@@ -117,4 +117,8 @@ The installed runtime also has an explicit, state-mutating owner command for a n
 
 Before considering an owner-authorized deployment, review [Configuration](docs/configuration.md), [Lifecycle and rollback](docs/lifecycle-and-rollback.md), [Troubleshooting](docs/troubleshooting.md), and the [Roadmap](docs/roadmap.md). Always inspect each lifecycle script's `--help` output before running it.
 
-No license, public release, compatibility guarantee, successful CI run, or production recovery claim is implied by this development tree.
+## License
+
+MountWatchdog is available under the [MIT License](LICENSE).
+
+No public release, compatibility guarantee, successful CI run, or production recovery claim is implied by this development tree.
