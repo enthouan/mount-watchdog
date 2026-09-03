@@ -67,9 +67,11 @@ sudo /bin/bash ./install_mount_watchdog.sh \
   Archive Studio
 ```
 
-A fresh install registers the canonical LaunchDaemon. A maintained upgrade validates the existing manifest and checksums, creates a protected path-preserving backup, replaces the managed files atomically, and preserves the canonical loaded/disabled policy. Catchable failures before the commit boundary attempt to restore the files and service state.
+A fresh install registers and enables the canonical LaunchDaemon unless macOS still has a disabled override from an earlier installation. The installer preserves that override by default and leaves the job disabled and unloaded. Pass `--enable` only when the dry-run reports that policy and you intentionally want to clear it and bootstrap the job.
 
-Record the protected backup path and rollback identifier printed by the installer. Do not use `--enable` unless you intentionally want to enable and bootstrap a previously disabled or unloaded job. Use `--replace-targets` only after reviewing an intentional removal from the installed selected set.
+A maintained upgrade validates the existing manifest and checksums, creates a protected path-preserving backup, replaces the managed files atomically, and preserves the canonical loaded/disabled policy. Catchable failures before the commit boundary attempt to restore the files and service state.
+
+Record the protected backup path and rollback identifier printed by the installer. Use `--replace-targets` only after reviewing an intentional removal from the installed selected set.
 
 ## Verify
 
