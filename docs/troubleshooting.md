@@ -8,7 +8,7 @@ For an installed copy, use the dedicated installed status script:
 sudo /bin/bash '/Library/Application Support/MountWatchdog/status.sh' --status
 ```
 
-The maintained status source intentionally rejects a noncanonical production path, so invoking the repository copy directly is not an installed-machine diagnostic. `sudo` may be necessary only because the established installed config and state paths are root-readable. The status implementation itself is read-only: it must not create state, contact port 445, unmount, refresh autofs, start/stop launchd, or run a tick.
+The maintained status source intentionally rejects a noncanonical installed path, so invoking the repository copy directly is not an installed-machine diagnostic. `sudo` may be necessary only because the established installed config and state paths are root-readable. The status implementation itself is read-only: it must not create state, contact port 445, unmount, refresh autofs, start/stop launchd, or run a tick.
 
 ## Reading a status
 

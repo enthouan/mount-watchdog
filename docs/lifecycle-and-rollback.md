@@ -1,12 +1,10 @@
 # Lifecycle and rollback
 
-This document describes the reviewed installer, upgrade, rollback, and removal lifecycle. Repository implementation and fixture testing do not authorize deployment, service interruption, unmounting, map changes, or outage/reboot tests.
+This document describes the installer, upgrade, rollback, and removal lifecycle. Use only the maintained lifecycle scripts at the repository root and preview changes with `--dry-run` first.
 
-Version `0.1.0` is the initial public release and is not production-validated. Use only the maintained lifecycle scripts at the repository root.
+Start with [Setup](setup.md) for the supported autofs prerequisites and the complete installation path.
 
-> **Do not deploy `0.1.0` to a production Mac.** Neither target Mac has been inventoried against this exact candidate, and no native install, rollback, reboot, scheduling, or controlled-recovery acceptance has been recorded. Consult the [Roadmap](roadmap.md). The commands below describe the intended owner-run lifecycle after those gates are resolved and separately authorized.
-
-## Before deployment
+## Before installation
 
 1. Review the exact candidate diff and latest local and CI results.
 2. Identify the target Mac from its intended configuration, not merely its shell prompt.
@@ -29,19 +27,22 @@ The installer accepts selected mount names plus `--local-user USER` and `--dry-r
 A dry-run does not acquire the privileged lifecycle lock, write installed paths, or call mutating launchd operations. Its result is a point-in-time snapshot. An upgrade dry-run may need `sudo` only to inspect the established root-only maintained installation; the later live invocation revalidates everything under the shared root lock.
 
 ```bash
-LOCAL_USER='your-local-user'
-/bin/bash ./install_mount_watchdog.sh --dry-run --local-user "$LOCAL_USER" Archive Studio
+/bin/bash ./install_mount_watchdog.sh \
+  --dry-run \
+  --local-user "$(/usr/bin/whoami)" \
+  Archive Studio
 ```
 
-`Archive` and `Studio` are fictional public examples. Pass exactly the intended selected set for that Mac. `--staging-root EXISTING_NON_SYMLINK_DIR` is a nonprivileged fixture boundary, never a live-install redirection mechanism.
+`Archive` and `Studio` are fictional public examples. Pass exactly the intended selected set for that Mac. The shell evaluates `$(/usr/bin/whoami)` before any later `sudo` invocation, so the installer receives the current macOS username rather than `root`. `--staging-root EXISTING_NON_SYMLINK_DIR` is a nonprivileged fixture boundary, never a live-install redirection mechanism.
 
 ## Fresh install or maintained upgrade
 
-Only after dry-run review and owner approval:
+After reviewing the dry-run:
 
 ```bash
-LOCAL_USER='your-local-user'
-sudo /bin/bash ./install_mount_watchdog.sh --local-user "$LOCAL_USER" Archive Studio
+sudo /bin/bash ./install_mount_watchdog.sh \
+  --local-user "$(/usr/bin/whoami)" \
+  Archive Studio
 ```
 
 The installer supports only a fresh destination or an exact manifest-owned maintained installation. Canonical artifacts without the maintained manifest are unmanaged collisions and fail closed; the installer has no adoption or historical-install conversion mode.
@@ -79,7 +80,7 @@ sudo /bin/bash ./uninstall_mount_watchdog.sh --dry-run rollback "$BACKUP_ID"
 
 The identifier is a single directory name beneath `/Library/Application Support/MountWatchdog/backups`; arbitrary paths are refused. The dry-run requires the current format-3 committed install backup, verifies the exact allowlisted path set and file metadata, binds the backup to the current maintained install-manifest digest, and reports the prior canonical service policy.
 
-After separate approval:
+To perform the rollback:
 
 ```bash
 sudo /bin/bash ./uninstall_mount_watchdog.sh rollback "$BACKUP_ID"
@@ -102,8 +103,8 @@ Use `--dry-run` first. `stop` affects the current loaded job without deleting ar
 
 Every mode requires the maintained manifest, exact allowlisted records and present-file hashes, and the canonical plist's exact execution-affecting schema before any launchd action. Cleanup never follows an untrusted symlink or derives a recursive target from an unchecked name.
 
-## Native acceptance
+## Optional live checks
 
-Reboot, sleep/wake, controlled network interruption, busy-share behavior, and manual application access after a permitted normal unmount require a maintenance window and explicit owner authorization. Stop if files may be in use, a mount source is unexpected, inspection fails, the normal unmount is busy, an action becomes blocked, or rollback evidence is incomplete.
+Reboot, sleep/wake, controlled network interruption, and busy-share tests can trigger recovery actions, including a live normal unmount. Run them only when you explicitly intend those effects and have a maintenance window. Stop if files may be in use, a mount source is unexpected, inspection fails, the normal unmount is busy, an action becomes blocked, or rollback evidence is incomplete.
 
 Metadata status is only one acceptance signal. The owner performs the eventual application access; MountWatchdog never adds an automatic content probe to manufacture that evidence.

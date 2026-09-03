@@ -2,7 +2,45 @@
 
 MountWatchdog is a small macOS `autofs`/SMB mount-state monitor and conservative recovery helper. It manages only mount names selected by the operator and leaves the existing autofs maps in charge of credentials and on-demand mounting.
 
-This tree is version `0.1.0`. It has not been production-validated and is not deployment-ready. The initial release includes fixture-tested post-success rollback, narrow owner acknowledgment for resolved `manual-attention` latches, and a fail-closed macOS ACL policy. Exact-candidate review, remaining synthetic gaps, live target inventory, native lifecycle/recovery validation, and the other items in the [Roadmap](docs/roadmap.md) still block deployment. Building or testing the repository does not authorize installing it on a Mac, restarting a service, unmounting a share, or changing autofs.
+The current release is `v0.1.0`.
+
+## Setup
+
+MountWatchdog expects macOS autofs to already provide the SMB mounts you want to monitor. It does not configure autofs or credentials. The supported setup requires an active `/- auto_smb` or `/- /etc/auto_smb` entry and one compatible `/etc/auto_smb` record for each selected `/Users/<current-user>/<mount-name>` path; review the [detailed setup guide](docs/setup.md) before installing.
+
+Clone and validate the release:
+
+```bash
+git clone https://github.com/enthouan/mount-watchdog.git
+cd mount-watchdog
+git switch --detach v0.1.0
+/bin/bash tests/run.sh
+```
+
+Replace `Archive Studio` with the complete local mount-name set for this Mac, then preview the installation:
+
+```bash
+/bin/bash ./install_mount_watchdog.sh \
+  --dry-run \
+  --local-user "$(/usr/bin/whoami)" \
+  Archive Studio
+```
+
+Only after reviewing that plan and authorizing the live lifecycle change:
+
+```bash
+sudo /bin/bash ./install_mount_watchdog.sh \
+  --local-user "$(/usr/bin/whoami)" \
+  Archive Studio
+```
+
+The invoking shell evaluates `$(/usr/bin/whoami)` before `sudo`, so the installer receives the current macOS user rather than `root`. Verify the result through the installed read-only status command:
+
+```bash
+sudo /bin/bash '/Library/Application Support/MountWatchdog/status.sh' --status
+```
+
+For prerequisites, expected output, upgrades, verification, and rollback, follow [Setup](docs/setup.md).
 
 ## What it can observe
 
@@ -21,19 +59,19 @@ MountWatchdog observes SMB mounts that macOS autofs already defines. A supported
 /- auto_smb
 ```
 
-The corresponding `/etc/auto_smb` records use absolute local paths. Historical deployments used this general structural form:
+The corresponding `/etc/auto_smb` records use absolute local paths. Historical configurations used this general structural form:
 
 ```text
 /Users/<local-user>/<local-name> -fstype=smb,soft,noowners,nosuid ://<credentials>@<nas-host>/<remote-share>
 ```
 
-`<credentials>` is a non-secret placeholder that documents deployment history only, not a recommended map pattern. This usable sanitized example omits credentials, uses a reserved TEST-NET address, and maps the local name `Archive` to a different remote share name, `Vault`:
+`<credentials>` is a non-secret placeholder that documents prior configurations only, not a recommended map pattern. This usable sanitized example omits credentials, uses a reserved TEST-NET address, and maps the local name `Archive` to a different remote share name, `Vault`:
 
 ```text
 /Users/example/Archive -fstype=smb,soft,noowners,nosuid ://192.0.2.10/Vault
 ```
 
-Local and remote names are independent. In this sanitized example, the local name `Studio` maps to the remote share `Workspace`; MountWatchdog therefore records both values and never derives the share from the local name. Some historical installations contained embedded SMB credentials in their maps. That is deployment context, not a recommended pattern or something to copy into this repository, logs, or diagnostics.
+Local and remote names are independent. In this sanitized example, the local name `Studio` maps to the remote share `Workspace`; MountWatchdog therefore records both values and never derives the share from the local name. Some historical installations contained embedded SMB credentials in their maps. That is configuration context, not a recommended pattern or something to copy into this repository, logs, or diagnostics.
 
 MountWatchdog never creates or edits `/etc/auto_master`, `/etc/auto_smb`, passwords, or Keychain entries. A recovery refresh asks autofs to reload already-defined mapping metadata; it does not browse the mount or proactively remount SMB. The next legitimate user or application access triggers the normal on-demand mount.
 
@@ -115,10 +153,8 @@ Read-only means it performs no tick, state creation, TCP probe, unmount, refresh
 
 The installed runtime also has an explicit, state-mutating owner command for a narrow class of resolved manual-attention latches. It is not a diagnostic shortcut; follow the review and eligibility procedure in [Troubleshooting](docs/troubleshooting.md) before using `--acknowledge-manual-attention`.
 
-Before considering an owner-authorized deployment, review [Configuration](docs/configuration.md), [Lifecycle and rollback](docs/lifecycle-and-rollback.md), [Troubleshooting](docs/troubleshooting.md), and the [Roadmap](docs/roadmap.md). Always inspect each lifecycle script's `--help` output before running it.
+Before installing, review [Configuration](docs/configuration.md), [Lifecycle and rollback](docs/lifecycle-and-rollback.md), and [Troubleshooting](docs/troubleshooting.md). Always inspect each lifecycle script's `--help` output before running it.
 
 ## License
 
 MountWatchdog is available under the [MIT License](LICENSE).
-
-Version `0.1.0` carries no compatibility guarantee or production-recovery claim. Passing CI establishes only the fixture-tested behavior described above.

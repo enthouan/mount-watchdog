@@ -4,7 +4,7 @@ Status: researched design only. MountWatchdog does not implement this migration,
 
 ## Why consider it
 
-The current deployment adds this direct-map record to `/etc/auto_master`:
+The current configuration adds this direct-map record to `/etc/auto_master`:
 
 ```text
 /- auto_smb
@@ -27,7 +27,7 @@ That source suggests this candidate local record, expressed as data rather than 
 | `MetaAutomountMap` | `auto_master` | Makes the stock `+auto_master` lookup select the record. |
 | `AutomountInformation` | `auto_smb` | Refers to the existing `/etc/auto_smb` map by its conventional name. |
 
-The record must not contain SMB credentials, a NAS address, or an SMB share. Those remain solely in the existing protected `/etc/auto_smb` deployment file. Historical maps embedded credentials; that is deployment context, not a recommended credential-storage pattern.
+The record must not contain SMB credentials, a NAS address, or an SMB share. Those remain solely in the existing protected `/etc/auto_smb` configuration file. Historical maps embedded credentials; that is configuration context, not a recommended credential-storage pattern.
 
 These candidate values are an inference from Apple's source, not validated operational instructions. In particular, this repository has not established the correct local-node record path or quoting rules for the target macOS release, whether other directory nodes contribute conflicting records, or how the effective direct-map ordering behaves on both machines.
 
