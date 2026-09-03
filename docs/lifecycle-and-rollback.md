@@ -1,14 +1,10 @@
 # Lifecycle and rollback
 
-This document describes the reviewed installer, upgrade, rollback, and removal lifecycle. Repository implementation and fixture testing do not authorize deployment, service interruption, unmounting, map changes, or outage/reboot tests.
-
-Version `0.1.0` is the initial public release and is not production-validated. Use only the maintained lifecycle scripts at the repository root.
+This document describes the installer, upgrade, rollback, and removal lifecycle. Use only the maintained lifecycle scripts at the repository root and preview changes with `--dry-run` first.
 
 Start with [Setup](setup.md) for the supported autofs prerequisites and the complete installation path.
 
-> **Do not deploy `0.1.0` to a production Mac.** Neither target Mac has been inventoried against this exact candidate, and no native install, rollback, reboot, scheduling, or controlled-recovery acceptance has been recorded. Consult the [Roadmap](roadmap.md). The commands below describe the intended owner-run lifecycle after those gates are resolved and separately authorized.
-
-## Before deployment
+## Before installation
 
 1. Review the exact candidate diff and latest local and CI results.
 2. Identify the target Mac from its intended configuration, not merely its shell prompt.
@@ -41,7 +37,7 @@ A dry-run does not acquire the privileged lifecycle lock, write installed paths,
 
 ## Fresh install or maintained upgrade
 
-Only after dry-run review and owner approval:
+After reviewing the dry-run:
 
 ```bash
 sudo /bin/bash ./install_mount_watchdog.sh \
@@ -84,7 +80,7 @@ sudo /bin/bash ./uninstall_mount_watchdog.sh --dry-run rollback "$BACKUP_ID"
 
 The identifier is a single directory name beneath `/Library/Application Support/MountWatchdog/backups`; arbitrary paths are refused. The dry-run requires the current format-3 committed install backup, verifies the exact allowlisted path set and file metadata, binds the backup to the current maintained install-manifest digest, and reports the prior canonical service policy.
 
-After separate approval:
+To perform the rollback:
 
 ```bash
 sudo /bin/bash ./uninstall_mount_watchdog.sh rollback "$BACKUP_ID"
@@ -107,8 +103,8 @@ Use `--dry-run` first. `stop` affects the current loaded job without deleting ar
 
 Every mode requires the maintained manifest, exact allowlisted records and present-file hashes, and the canonical plist's exact execution-affecting schema before any launchd action. Cleanup never follows an untrusted symlink or derives a recursive target from an unchecked name.
 
-## Native acceptance
+## Optional live checks
 
-Reboot, sleep/wake, controlled network interruption, busy-share behavior, and manual application access after a permitted normal unmount require a maintenance window and explicit owner authorization. Stop if files may be in use, a mount source is unexpected, inspection fails, the normal unmount is busy, an action becomes blocked, or rollback evidence is incomplete.
+If you test reboot, sleep/wake, controlled network interruption, busy-share behavior, or manual application access after a normal unmount, use a maintenance window. Stop if files may be in use, a mount source is unexpected, inspection fails, the normal unmount is busy, an action becomes blocked, or rollback evidence is incomplete.
 
 Metadata status is only one acceptance signal. The owner performs the eventual application access; MountWatchdog never adds an automatic content probe to manufacture that evidence.

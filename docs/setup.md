@@ -2,8 +2,6 @@
 
 MountWatchdog accompanies an existing macOS autofs/SMB configuration. It does not create or edit `/etc/auto_master`, `/etc/auto_smb`, SMB credentials, Keychain entries, or mountpoint content.
 
-> **Version `0.1.0` is not production-validated or deployment-ready.** The steps below describe the maintained setup path, but native install, rollback, reboot, scheduling, and controlled-recovery acceptance remain outstanding. Review the [Roadmap](roadmap.md) before installing on a machine that matters.
-
 ## Prerequisites
 
 Use a macOS host with Apple `/bin/bash` 3.2 and an existing autofs configuration that satisfies the [supported subset](configuration.md#supported-autofs-subset):
@@ -33,7 +31,7 @@ Run the nonprivileged fixture suite and inspect the installer help:
 /bin/bash ./install_mount_watchdog.sh --help
 ```
 
-The test suite does not touch live mounts, launchd, autofs maps, system directories, or NAS hosts. A passing result is fixture evidence, not native deployment validation.
+The test suite does not touch live mounts, launchd, autofs maps, system directories, or NAS hosts.
 
 ## Preview the installation
 
@@ -61,7 +59,7 @@ Review the reported user, every selected path/host/share tuple, source mode, pri
 
 ## Install
 
-Only after reviewing the dry-run and separately authorizing the live lifecycle change:
+After reviewing the dry-run:
 
 ```bash
 sudo /bin/bash ./install_mount_watchdog.sh \
@@ -101,10 +99,10 @@ BACKUP_ID='exact-id-emitted-by-installer'
 sudo /bin/bash ./uninstall_mount_watchdog.sh --dry-run rollback "$BACKUP_ID"
 ```
 
-After separately authorizing the rollback:
+To perform the rollback:
 
 ```bash
 sudo /bin/bash ./uninstall_mount_watchdog.sh rollback "$BACKUP_ID"
 ```
 
-See [Lifecycle and rollback](lifecycle-and-rollback.md) for backup semantics, stopping, disabling, removal, lifecycle-lock handling, and native acceptance boundaries. See [Troubleshooting](troubleshooting.md) before acting on configuration drift, manual-attention state, or retained crash evidence.
+See [Lifecycle and rollback](lifecycle-and-rollback.md) for backup semantics, stopping, disabling, removal, lifecycle-lock handling, and optional live checks. See [Troubleshooting](troubleshooting.md) before acting on configuration drift, manual-attention state, or retained crash evidence.

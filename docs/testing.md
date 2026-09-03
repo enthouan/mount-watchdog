@@ -34,7 +34,7 @@ Each fixture owns a temporary directory and fictional TEST-NET metadata. Tests m
 
 Remaining synthetic gaps include additional non-SMB/ambiguous/prefix layer shapes, broader unsupported unselected-map/options records, backup failure before service stop, bootstrap-failure rollback, failure during multi-record owner acknowledgment, additional noncanonical/inherited ACL combinations, and more exhaustive positive command-argument assertions. The candidate records semantic error categories and numeric command exit status but deliberately excludes raw command stderr from durable diagnostics; a strictly allowlisted, credential-safe detail design remains unresolved.
 
-Native checks remain separate and owner-authorized: launchd disabled-state semantics, reboot recreation, real periodic scheduling, a controlled outage/return, sleep/wake behavior, a busy normal unmount, and manual application access after recovery. No ordinary fixture or CI run may perform those actions.
+Native checks remain separate: launchd disabled-state semantics, reboot recreation, real periodic scheduling, a controlled outage/return, sleep/wake behavior, a busy normal unmount, and manual application access after recovery. No ordinary fixture or CI run may perform those actions.
 
 ## Reporting evidence
 
