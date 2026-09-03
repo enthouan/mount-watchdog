@@ -105,6 +105,6 @@ Every mode requires the maintained manifest, exact allowlisted records and prese
 
 ## Optional live checks
 
-If you test reboot, sleep/wake, controlled network interruption, busy-share behavior, or manual application access after a normal unmount, use a maintenance window. Stop if files may be in use, a mount source is unexpected, inspection fails, the normal unmount is busy, an action becomes blocked, or rollback evidence is incomplete.
+Reboot, sleep/wake, controlled network interruption, and busy-share tests can trigger recovery actions, including a live normal unmount. Run them only when you explicitly intend those effects and have a maintenance window. Stop if files may be in use, a mount source is unexpected, inspection fails, the normal unmount is busy, an action becomes blocked, or rollback evidence is incomplete.
 
 Metadata status is only one acceptance signal. The owner performs the eventual application access; MountWatchdog never adds an automatic content probe to manufacture that evidence.
