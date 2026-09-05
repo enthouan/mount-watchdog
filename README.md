@@ -26,6 +26,8 @@ Replace `Archive Studio` with the complete local mount-name set for this Mac, th
   Archive Studio
 ```
 
+If the autofs maps are readable only by `root`, run the same preview with `sudo`; do not loosen their permissions. The invoking shell still evaluates `$(/usr/bin/whoami)` before `sudo`.
+
 Only after reviewing that plan and authorizing the live lifecycle change:
 
 ```bash

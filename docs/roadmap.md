@@ -21,7 +21,7 @@ MountWatchdog should remain a small native utility. This roadmap tracks the impl
 
 ## Optional native checks
 
-Use a controlled maintenance window to exercise launchd registration and disabled-state behavior, reboot-created state, periodic scheduling, an outage/return transition, sleep/wake heuristic reporting, busy normal-unmount handling, and manual application access after recovery. These checks exercise macOS and network behavior that the fixture suite does not reproduce.
+Only with explicit owner authorization for those effects, use a controlled maintenance window to exercise launchd registration and disabled-state behavior, reboot-created state, periodic scheduling, an outage/return transition, sleep/wake heuristic reporting, busy normal-unmount handling, and manual application access after recovery. These checks exercise macOS and network behavior that the fixture suite does not reproduce.
 
 ## Optional later enhancements
 

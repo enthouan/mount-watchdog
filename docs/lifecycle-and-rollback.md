@@ -24,7 +24,7 @@ Run the nonprivileged repository tests first:
 
 The installer accepts selected mount names plus `--local-user USER` and `--dry-run`. It validates the platform, active-map arrangement, selected mappings, generated config, source scripts, plist, and installation plan. It reports the source mode, prior canonical service policy, and intended lifecycle decision.
 
-A dry-run does not acquire the privileged lifecycle lock, write installed paths, or call mutating launchd operations. Its result is a point-in-time snapshot. An upgrade dry-run may need `sudo` only to inspect the established root-only maintained installation; the later live invocation revalidates everything under the shared root lock.
+A dry-run does not acquire the privileged lifecycle lock, write installed paths, or call mutating launchd operations. Its result is a point-in-time snapshot. A fresh-install dry-run may need `sudo` to read protected autofs maps, and an upgrade dry-run may need it to inspect the established root-only maintained installation. Do not loosen protected file permissions; the later live invocation revalidates everything under the shared root lock.
 
 ```bash
 /bin/bash ./install_mount_watchdog.sh \

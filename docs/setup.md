@@ -57,9 +57,9 @@ Run these commands from the intended local user's normal shell. Replace `Archive
   Archive Studio
 ```
 
-The shell evaluates `$(/usr/bin/whoami)` before any later `sudo` invocation, so the installer receives the current macOS username rather than `root`. The dry-run validates the release sources, platform, maps, selected paths, generated configuration, and intended service policy without acquiring the lifecycle lock, writing installed files, or changing launchd state.
+The shell evaluates `$(/usr/bin/whoami)` before an optional `sudo` invocation, so the installer receives the current macOS username rather than `root`. The dry-run validates the release sources, platform, maps, selected paths, generated configuration, and intended service policy without acquiring the lifecycle lock, writing installed files, or changing launchd state.
 
-A maintained upgrade may require `sudo` for its dry-run because the existing installation is root-readable:
+A fresh-install dry-run may require `sudo` when an autofs map is readable only by `root`; a maintained-upgrade dry-run may also require it because the existing installation is root-readable. Do not loosen the permissions of protected maps or installed files. Instead, rerun the same preview with `sudo`:
 
 ```bash
 sudo /bin/bash ./install_mount_watchdog.sh \
@@ -126,7 +126,7 @@ sudo /bin/bash ./install_mount_watchdog.sh \
   Archive Studio
 ```
 
-Review the source version, selected path/host/share tuples, prior service policy, lifecycle decision, and proposed backup. If the plan is correct, run the same command without `--dry-run`:
+Review the reported source mode, local user, selected path/host/share tuples, prior service policy, and lifecycle decision. If the plan is correct, run the same command without `--dry-run`:
 
 ```bash
 sudo /bin/bash ./install_mount_watchdog.sh \
