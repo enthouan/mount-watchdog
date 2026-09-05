@@ -101,7 +101,42 @@ Status proves only cached mount-table and bounded TCP observations. It never pro
 
 ## Update an existing maintained installation
 
-Check out the new release, rerun `/bin/bash tests/run.sh`, capture the current version and read-only status, and then repeat the dry-run and install commands above with the same complete mount-name list.
+MountWatchdog does not update itself. To update an existing maintained installation, fetch the new release in your repository clone and check out its exact tag. Replace `vX.Y.Z` with the release you intend to install:
+
+```bash
+cd mount-watchdog
+git fetch --tags origin
+git switch --detach vX.Y.Z
+/bin/bash tests/run.sh
+```
+
+Before changing the installation, record its current version and cached read-only status:
+
+```bash
+sudo /bin/cat '/Library/Application Support/MountWatchdog/VERSION'
+sudo /bin/bash '/Library/Application Support/MountWatchdog/status.sh' --status
+```
+
+Preview the update from the new release checkout. Pass the complete existing mount-name set, not only names that changed:
+
+```bash
+sudo /bin/bash ./install_mount_watchdog.sh \
+  --dry-run \
+  --local-user "$(/usr/bin/whoami)" \
+  Archive Studio
+```
+
+Review the source version, selected path/host/share tuples, prior service policy, lifecycle decision, and proposed backup. If the plan is correct, run the same command without `--dry-run`:
+
+```bash
+sudo /bin/bash ./install_mount_watchdog.sh \
+  --local-user "$(/usr/bin/whoami)" \
+  Archive Studio
+```
+
+The update validates the maintained manifest and installed checksums, creates a protected rollback backup, replaces the managed scripts and configuration, and restores the prior enabled/loaded policy. Record the emitted backup identifier. Use `--replace-targets` only when intentionally removing a previously selected mount, and use `--enable` only when intentionally changing a preserved disabled or unloaded service policy.
+
+Afterward, repeat the version and read-only status commands above. A changed runtime fingerprint establishes a new baseline, so status may initially be unavailable or pending until the next scheduled tick.
 
 The installer accepts only an exact manifest-owned maintained installation. If `/Library/Application Support/MountWatchdog/install-manifest.tsv` is absent, unsafe, or inconsistent with the installed files, the installer reports an unmanaged collision and makes no changes. Version `0.1.0` has no automatic adoption or historical-install conversion path.
 
