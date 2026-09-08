@@ -1247,6 +1247,51 @@ test_post_success_rollback_failure_is_latched_and_quiesced() {
   /usr/bin/grep -q 'selected backup already has post-success rollback evidence' "$root/retry-output" || return 1
 }
 
+test_all_selection() {
+  root=$(new_root all-selection)
+  run_install "$root" --all --dry-run || { /bin/cat "$TEST_TMP/${root##*/}-install-output" >&2; return 1; }
+  output=$TEST_TMP/${root##*/}-install-output
+  /usr/bin/grep -q 'selected mappings: 2' "$output" || return 1
+  ! /usr/bin/grep -q 'p%40ss\|test:secret' "$output" || return 1
+  assert_file_absent "$root/Library" || return 1
+  assert_file_absent "$root/actions" || return 1
+  run_install "$root" --all || return 1
+  config="$root/Library/Application Support/MountWatchdog/mounts.conf"
+  expected=$(printf 'Media\t/Users/testuser/Media\t192.0.2.10\tMedia\nStudio\t/Users/testuser/Studio\t192.0.2.10\tWorkspace')
+  assert_eq "$expected" "$(/bin/cat "$config")" || return 1
+  : > "$root/actions"
+  # Loaded upgrades and lifecycle previews must use the actual identity parser.
+  MOUNTWATCHDOG_TEST_LOADED=1 run_install "$root" --all || return 1
+  MOUNTWATCHDOG_TEST_LOADED=1 /bin/bash "$UNINSTALLER" --staging-root "$root" --dry-run stop > "$root/stop-preview" 2>&1 || return 1
+  printf '/Users/testuser/Media -fstype=smbfs ://192.0.2.10/Media\n' > "$root/etc/auto_smb"
+  : > "$root/actions"
+  if run_install "$root" --all; then return 1; fi
+  [ ! -s "$root/actions" ] || return 1
+  /usr/bin/grep -q 'existing target would be removed' "$TEST_TMP/${root##*/}-install-output" || return 1
+  run_install "$root" --all --replace-targets || return 1
+  assert_eq 1 "$(/usr/bin/wc -l < "$config" | /usr/bin/tr -d ' ')" || return 1
+}
+
+test_all_rejects_ambiguous_or_invalid_selection() {
+  root=$(new_root all-invalid)
+  if run_install "$root" --all Media; then return 1; fi
+  if run_install "$root"; then return 1; fi
+  printf '# empty map\n' > "$root/etc/auto_smb"
+  if run_install "$root" --all; then return 1; fi
+  for bad_record in \
+    '/Users/other/Media -fstype=smb ://user:Secret@192.0.2.10/Media' \
+    '/Users/testuser/Media -fstype=nfs ://user:Secret@192.0.2.10/Media' \
+    '/Users/testuser/media -fstype=smb ://user:Secret@192.0.2.10/Media'; do
+    printf '/Users/testuser/Media -fstype=smb ://192.0.2.10/Media\n%s\n' "$bad_record" > "$root/etc/auto_smb"
+    if run_install "$root" --all; then return 1; fi
+    ! /usr/bin/grep -q Secret "$TEST_TMP/${root##*/}-install-output" || return 1
+  done
+  assert_file_absent "$root/Library" || return 1
+  assert_file_absent "$root/actions" || return 1
+}
+
+run_test 'all selection previews installs and upgrades with removal protection' test_all_selection
+run_test 'all selection rejects mixed arguments empty and invalid maps' test_all_rejects_ambiguous_or_invalid_selection
 run_test 'installer dry-run is destination-read-only and credential-redacted' test_dry_run_is_read_only_and_redacted
 run_test 'auto_smb accepts only exact smb or smbfs fstype aliases' test_smb_fstype_aliases_are_exact_and_redacted
 run_test 'privileged entrypoints reject untrusted repository sources before sourcing' test_privileged_entrypoints_reject_untrusted_sources_before_sourcing

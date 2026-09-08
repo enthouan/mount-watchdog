@@ -44,6 +44,8 @@ sudo /bin/bash '/Library/Application Support/MountWatchdog/status.sh' --status
 
 For prerequisites, expected output, upgrades, verification, and rollback, follow [Setup](docs/setup.md).
 
+The development checkout also supports `--all` in place of `Archive Studio` to select every validated mapping in `/etc/auto_smb` for the local user. This option is not available in `v0.1.0`; check the installer `--help` for the version you are using. Explicit names still select a subset. Preview every selection before installing.
+
 ## What it can observe
 
 The runtime compares the local mount table with credential-free host/share metadata and checks whether the host accepts a TCP connection on port 445. A `mounted-reachable` result therefore means only:
