@@ -294,67 +294,23 @@ mw_launchctl_job_state() {
 }
 
 mw_validate_loaded_job_identity() {
-  mw_identity_label=$1
-  mw_identity_path=$2
-  mw_identity_program=$3
-  mw_identity_argc=$4
-  mw_identity_arg0=$5
-  mw_identity_arg1=${6:-}
+  local mw_identity_label=$1 mw_identity_path=$2 mw_identity_program=$3
+  local mw_identity_argc=$4 mw_identity_arg0=$5 mw_identity_arg1=${6:-}
+  local mw_identity_output mw_test_program=/bin/bash
   if [ -n "$mw_root" ]; then
+    # Synthetic command output goes through the same parser as live output.
     case "${MOUNTWATCHDOG_TEST_LOADED_IDENTITY_MISMATCH:-}" in
-      '') return 0 ;;
-      canonical) return 1 ;;
-      *) return 1 ;;
+      '') ;;
+      *) mw_test_program=/bin/false ;;
     esac
+    mw_identity_output=$(printf 'path = %s\nprogram = %s\narguments = {\n/bin/bash\n%s/watchdog.sh\n}\n' \
+      "$MW_PLIST" "$mw_test_program" "$MW_APP")
+  else
+    mw_identity_output=$(/bin/launchctl print "system/$mw_identity_label" 2>/dev/null) || return 1
   fi
-  mw_identity_output=$(/bin/launchctl print "system/$mw_identity_label" 2>/dev/null) || return 1
-  printf '%s\n' "$mw_identity_output" | /usr/bin/awk \
-    -v expected_path="$mw_identity_path" \
-    -v expected_program="$mw_identity_program" \
-    -v expected_argc="$mw_identity_argc" \
-    -v expected_arg0="$mw_identity_arg0" \
-    -v expected_arg1="$mw_identity_arg1" '
-      function trim(value) {
-        sub(/^[[:space:]]+/, "", value)
-        sub(/[[:space:]]+$/, "", value)
-        return value
-      }
-      {
-        line = trim($0)
-        if (in_arguments) {
-          if (line == "}") {
-            in_arguments = 0
-            next
-          }
-          if (line != "") {
-            arguments[argument_count] = line
-            argument_count++
-          }
-          next
-        }
-        if (line == "arguments = {") {
-          arguments_seen++
-          in_arguments = 1
-          next
-        }
-        if (index(line, "path = ") == 1) {
-          path_seen++
-          actual_path = substr(line, 8)
-          next
-        }
-        if (index(line, "program = ") == 1) {
-          program_seen++
-          actual_program = substr(line, 11)
-        }
-      }
-      END {
-        valid = path_seen == 1 && program_seen == 1 && arguments_seen == 1 && !in_arguments
-        valid = valid && actual_path == expected_path && actual_program == expected_program
-        valid = valid && argument_count == expected_argc && arguments[0] == expected_arg0
-        if (expected_argc == 2) valid = valid && arguments[1] == expected_arg1
-        exit valid ? 0 : 1
-      }
-    '
+  printf '%s\n' "$mw_identity_output" | \
+    mw_launchctl_job_identity_matches "$mw_identity_path" "$mw_identity_program" \
+      "$mw_identity_argc" "$mw_identity_arg0" "$mw_identity_arg1"
 }
 
 mw_lock_held=0
