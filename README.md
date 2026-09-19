@@ -8,6 +8,8 @@ The current release is `v0.1.0`.
 
 MountWatchdog expects macOS autofs to already provide the SMB mounts you want to monitor. It does not configure autofs or credentials. The supported setup requires an active `/- auto_smb` or `/- /etc/auto_smb` entry and one compatible `/etc/auto_smb` record for each selected `/Users/<current-user>/<mount-name>` path; review the [detailed setup guide](docs/setup.md) before installing.
 
+For more detail on the macOS autofs/SMB setup behind MountWatchdog, see [Automatically mount SMB shares on macOS](https://www.antoinemenard.com/articles/automatically-mount-smb-shares-macos/).
+
 Clone and validate the release:
 
 ```bash
