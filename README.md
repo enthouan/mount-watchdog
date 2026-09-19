@@ -2,7 +2,7 @@
 
 MountWatchdog is a small macOS `autofs`/SMB mount-state monitor and conservative recovery helper. It manages only mount names selected by the operator and leaves the existing autofs maps in charge of credentials and on-demand mounting.
 
-The current release is `v0.1.0`.
+The current release is `v0.2.0`.
 
 ## Setup
 
@@ -15,7 +15,7 @@ Clone and validate the release:
 ```bash
 git clone https://github.com/enthouan/mount-watchdog.git
 cd mount-watchdog
-git switch --detach v0.1.0
+git switch --detach v0.2.0
 /bin/bash tests/run.sh
 ```
 
@@ -46,7 +46,7 @@ sudo /bin/bash '/Library/Application Support/MountWatchdog/status.sh' --status
 
 For prerequisites, expected output, upgrades, verification, and rollback, follow [Setup](docs/setup.md).
 
-The development checkout also supports `--all` in place of `Archive Studio` to select every validated mapping in `/etc/auto_smb` for the local user. This option is not available in `v0.1.0`; check the installer `--help` for the version you are using. Explicit names still select a subset. Preview every selection before installing.
+Starting with `v0.2.0`, the installer supports `--all` in place of `Archive Studio` to select every validated mapping in `/etc/auto_smb` for the local user. Selection is saved at installation time; new mappings require another reviewed installation. Explicit names still select a subset and cannot be mixed with `--all`. Removing installed targets still requires `--replace-targets`. The `v0.1.0` installer requires explicit names. Preview every selection before installing.
 
 ## What it can observe
 

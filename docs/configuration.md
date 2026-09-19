@@ -2,7 +2,7 @@
 
 MountWatchdog observes only mount names explicitly selected at installation time. The existing direct autofs maps remain authoritative; the installer reads the supported mapping metadata, validates every selected record, and renders a credential-free installed configuration. It never edits the maps.
 
-In the development installer, selection may be explicit names or `--all` for every validated map entry. `--all` is an installation-time choice, not an ongoing discovery policy; subsequent map additions require another reviewed installation to enter the saved selection. It preserves the same one-user, complete-map validation and removal protection (`--replace-targets`). The `v0.1.0` tag requires names.
+Starting with `v0.2.0`, selection may be explicit names or `--all` for every validated map entry. `--all` is an installation-time choice, not an ongoing discovery policy; subsequent map additions require another reviewed installation to enter the saved selection. It preserves the same one-user, complete-map validation and removal protection (`--replace-targets`). The `v0.1.0` tag requires names.
 
 ## Installed `mounts.conf`
 
@@ -69,3 +69,5 @@ Changing recovery aggressiveness requires explicit owner review. First startup, 
 ## Runtime input identity
 
 Cached state is bound to one runtime fingerprint. The fingerprint combines the installed config, defaults, and version inputs with SHA-256 identities for the maintained watchdog program and its common, runtime, and autofs libraries. A code-only change therefore changes the fingerprint even when `VERSION` is unchanged. Mismatched cached records are reported as stale input, and the next runtime tick establishes a fresh non-mutating baseline instead of replaying transition history from different code or configuration.
+
+Upgrading to `v0.2.0` changes the version input and therefore the fingerprint. Cached status can initially be stale, unavailable, or pending while the next scheduled tick establishes the new baseline; the monitoring and recovery policy is unchanged.
