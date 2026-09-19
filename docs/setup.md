@@ -34,7 +34,7 @@ Clone the repository and check out the release tag you intend to install:
 ```bash
 git clone https://github.com/enthouan/mount-watchdog.git
 cd mount-watchdog
-git switch --detach v0.1.0
+git switch --detach v0.2.0
 ```
 
 Run the nonprivileged fixture suite and inspect the installer help:
@@ -48,9 +48,9 @@ The test suite does not touch live mounts, launchd, autofs maps, system director
 
 ## Preview the installation
 
-### Select all mappings (development checkout)
+### Select all mappings
 
-The development installer supports `--all`; the published `v0.1.0` tag still requires explicit names. With a checkout that lists `--all` in its help, you can preview all mappings without repeating their names:
+Starting with `v0.2.0`, the installer supports `--all`; the `v0.1.0` tag requires explicit names. From the `v0.2.0` checkout, you can preview all mappings without repeating their names:
 
 ```bash
 sudo /bin/bash ./install_mount_watchdog.sh \
@@ -118,12 +118,12 @@ Status proves only cached mount-table and bounded TCP observations. It never pro
 
 ## Update an existing maintained installation
 
-MountWatchdog does not update itself. To update an existing maintained installation, fetch the new release in your repository clone and check out its exact tag. Replace `vX.Y.Z` with the release you intend to install:
+MountWatchdog does not update itself. To update an existing maintained installation to `v0.2.0`, fetch the release in your repository clone and check out its exact tag:
 
 ```bash
 cd mount-watchdog
 git fetch --tags origin
-git switch --detach vX.Y.Z
+git switch --detach v0.2.0
 /bin/bash tests/run.sh
 ```
 
@@ -136,7 +136,7 @@ sudo /bin/bash '/Library/Application Support/MountWatchdog/status.sh' --status
 
 Preview the update from the new release checkout. For a named selection, pass the complete existing mount-name set, not only names that changed.
 
-If the new checkout supports `--all`, you may replace `Archive Studio` with `--all` in both update commands to select the whole current map. This can add mappings beyond your previous selection, so review the complete plan. Removing a previously selected mapping still requires `--replace-targets`, even with `--all`. To keep a subset, continue supplying its complete names.
+With `v0.2.0`, you may replace `Archive Studio` with `--all` in both update commands to select the whole current map. This can add mappings beyond your previous selection, so review the complete plan. Removing a previously selected mapping still requires `--replace-targets`, even with `--all`. To keep a subset, continue supplying its complete names.
 
 ```bash
 sudo /bin/bash ./install_mount_watchdog.sh \
@@ -155,11 +155,11 @@ sudo /bin/bash ./install_mount_watchdog.sh \
 
 The update validates the maintained manifest and installed checksums, creates a protected rollback backup, replaces the managed scripts and configuration, and restores the prior enabled/loaded policy. Record the emitted backup identifier. Use `--replace-targets` only when intentionally removing a previously selected mount, and use `--enable` only when intentionally changing a preserved disabled or unloaded service policy.
 
-Afterward, repeat the version and read-only status commands above. A changed runtime fingerprint establishes a new baseline, so status may initially be unavailable or pending until the next scheduled tick.
+Afterward, repeat the version and read-only status commands above. The version change alters the runtime fingerprint, so the next scheduled tick establishes a fresh non-mutating baseline. Cached status may initially be stale, unavailable, or pending.
 
-The development installer and uninstaller fix a `v0.1.0` loaded-job identity parser bug that could reject valid jobs during upgrades, stopping, or removal. The first program argument was stored under an uninitialized AWK index. Use the corrected checkout's normal dry-run with the job still loaded; no manual unload is needed for this bug. A remaining identity error should be investigated before changing service state.
+The `v0.2.0` installer and uninstaller fix a `v0.1.0` loaded-job identity parser bug that could reject valid jobs during upgrades, stopping, or removal. The first program argument was stored under an uninitialized AWK index. Use the `v0.2.0` checkout's normal dry-run with the job still loaded; no manual unload is needed for this bug. A remaining identity error should be investigated before changing service state.
 
-The installer accepts only an exact manifest-owned maintained installation. If `/Library/Application Support/MountWatchdog/install-manifest.tsv` is absent, unsafe, or inconsistent with the installed files, the installer reports an unmanaged collision and makes no changes. Version `0.1.0` has no automatic adoption or historical-install conversion path.
+The installer accepts only an exact manifest-owned maintained installation. If `/Library/Application Support/MountWatchdog/install-manifest.tsv` is absent, unsafe, or inconsistent with the installed files, the installer reports an unmanaged collision and makes no changes. There is no automatic adoption or historical-install conversion path.
 
 ## Roll back or remove
 
