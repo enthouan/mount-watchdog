@@ -2,6 +2,8 @@
 
 MountWatchdog observes only mount names explicitly selected at installation time. The existing direct autofs maps remain authoritative; the installer reads the supported mapping metadata, validates every selected record, and renders a credential-free installed configuration. It never edits the maps.
 
+In the development installer, selection may be explicit names or `--all` for every validated map entry. `--all` is an installation-time choice, not an ongoing discovery policy; subsequent map additions require another reviewed installation to enter the saved selection. It preserves the same one-user, complete-map validation and removal protection (`--replace-targets`). The `v0.1.0` tag requires names.
+
 ## Installed `mounts.conf`
 
 Each data record contains exactly four TAB-separated fields:

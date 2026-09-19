@@ -135,6 +135,42 @@ test_launchctl_disabled_parser_matches_literal_label() {
   assert_eq 1 "$actual" 'exact disabled launchd label was not recognized' || return 1
 }
 
+test_launchctl_identity_parser() {
+  identity='path = /Library/LaunchDaemons/com.antoinemenard.mount-watchdog.plist
+program = /bin/bash
+arguments = {
+/bin/bash
+/Library/Application Support/MountWatchdog/watchdog.sh
+}'
+  check_identity() {
+    printf '%s\n' "$1" | mw_launchctl_job_identity_matches \
+      /Library/LaunchDaemons/com.antoinemenard.mount-watchdog.plist \
+      /bin/bash 2 /bin/bash '/Library/Application Support/MountWatchdog/watchdog.sh'
+  }
+  check_identity "$identity" || return 1
+  check_identity "$(printf '%s\n' "$identity" | /usr/bin/sed 's/^/    /')
+state = not running" || return 1
+  for identity_bad in \
+    "${identity/\/bin\/bash/\/bin\/false}" \
+    "${identity/watchdog.sh/other.sh}" \
+    "${identity/.plist/.plist.other}" \
+    "$identity
+path = /Library/LaunchDaemons/com.antoinemenard.mount-watchdog.plist" \
+    "$identity
+program = /bin/bash" \
+    "$identity
+arguments = {
+}" \
+    "${identity%\}}" \
+    "${identity%\}}
+extra
+}" \
+    '' ; do
+    ! check_identity "$identity_bad" || return 1
+  done
+}
+
+run_test 'loaded job parser accepts argument zero and rejects identity mismatches' test_launchctl_identity_parser
 run_test 'valid two-target config preserves Studio to Workspace mapping' test_valid_config
 run_test 'safe names remain exact and unsafe names are rejected' test_safe_names_are_not_normalized
 run_test 'case-colliding names are rejected' test_rejects_duplicate_case_collision

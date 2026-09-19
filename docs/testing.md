@@ -2,6 +2,8 @@
 
 MountWatchdog's automated tests are nonprivileged simulations. They exercise parsing, state decisions, staged filesystem operations, selected command requests, rollback, cleanup, and cached diagnostics without touching live mounts, launchd domains, autofs maps, NAS hosts, or system directories.
 
+Selection fixtures cover `--all` discovery, credential-free previews, loaded upgrades, invalid or empty maps, mixed selection arguments, and explicit removal approval. The loaded-job identity parser is shared by both lifecycle scripts and receives synthetic command output during fixtures; it is no longer bypassed by a success flag. Direct parser regressions exercise argument index zero, whitespace, wrong paths/programs/arguments, duplicate fields, extra arguments, and incomplete records.
+
 ## Command and platform
 
 Run the canonical fixture harness from the repository root on macOS:

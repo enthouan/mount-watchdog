@@ -107,10 +107,11 @@ mw_repo_file_is_trusted "$mw_installer_dir/lib/autofs.sh" || {
 mw_usage() {
   cat <<'EOF'
 Usage:
-  sudo /bin/bash ./install_mount_watchdog.sh [options] MOUNT_NAME [MOUNT_NAME ...]
+  sudo /bin/bash ./install_mount_watchdog.sh [options] (--all | MOUNT_NAME [MOUNT_NAME ...])
 
 Options:
   --local-user USER              Require /Users/USER/<name> targets.
+  --all                          Select every validated auto_smb mapping for USER.
   --dry-run                      Validate and print the plan; install nothing.
   --enable                       Bootstrap instead of preserving a disabled or unloaded job.
   --replace-targets              Permit removing names from installed config.
@@ -141,11 +142,13 @@ mw_root=
 mw_dry_run=0
 mw_enable=0
 mw_replace_targets=0
+mw_select_all=0
 mw_local_user=
 MW_REQUESTED=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --local-user) [ "$#" -ge 2 ] || { mw_usage >&2; exit 2; }; mw_local_user=$2; shift 2 ;;
+    --all) mw_select_all=1; shift ;;
     --dry-run) mw_dry_run=1; shift ;;
     --enable) mw_enable=1; shift ;;
     --replace-targets) mw_replace_targets=1; shift ;;
@@ -156,7 +159,11 @@ while [ "$#" -gt 0 ]; do
     *) MW_REQUESTED[${#MW_REQUESTED[@]}]=$1; shift ;;
   esac
 done
-[ "${#MW_REQUESTED[@]}" -gt 0 ] || { mw_usage >&2; exit 2; }
+if [ "$mw_select_all" -eq 1 ]; then
+  [ "${#MW_REQUESTED[@]}" -eq 0 ] || mw_die 'use either --all or explicit mount names, not both'
+else
+  [ "${#MW_REQUESTED[@]}" -gt 0 ] || { mw_usage >&2; exit 2; }
+fi
 
 if [ -n "$mw_root" ]; then
   [ "${EUID:-$(/usr/bin/id -u)}" -ne 0 ] || mw_die '--staging-root is forbidden when running as root'
@@ -176,6 +183,7 @@ mw_is_safe_user "$mw_local_user" || mw_die 'unsafe local user'
 [ -n "$mw_root" ] || /usr/bin/id "$mw_local_user" >/dev/null 2>&1 || mw_die "local user not found: $mw_local_user"
 
 MW_REQUESTED_FOLDED=()
+if [ "${#MW_REQUESTED[@]}" -gt 0 ]; then
 for mw_name in "${MW_REQUESTED[@]}"; do
   mw_is_safe_name "$mw_name" || mw_die "unsafe mount name: $mw_name"
   mw_folded=$(printf '%s' "$mw_name" | /usr/bin/tr '[:upper:]' '[:lower:]')
@@ -184,6 +192,7 @@ for mw_name in "${MW_REQUESTED[@]}"; do
   fi
   MW_REQUESTED_FOLDED[${#MW_REQUESTED_FOLDED[@]}]=$mw_folded
 done
+fi
 
 mw_dest() {
   case "$1" in /*) ;; *) return 1 ;; esac
@@ -277,19 +286,30 @@ MW_SELECTED_NAMES=()
 MW_SELECTED_PATHS=()
 MW_SELECTED_HOSTS=()
 MW_SELECTED_SHARES=()
-for mw_name in "${MW_REQUESTED[@]}"; do
-  mw_found=-1
+if [ "$mw_select_all" -eq 1 ]; then
   mw_i=0
   while [ "$mw_i" -lt "${#MW_AUTO_NAMES[@]}" ]; do
-    [ "${MW_AUTO_NAMES[$mw_i]}" = "$mw_name" ] && mw_found=$mw_i
+    MW_SELECTED_NAMES[${#MW_SELECTED_NAMES[@]}]=${MW_AUTO_NAMES[$mw_i]}
+    MW_SELECTED_PATHS[${#MW_SELECTED_PATHS[@]}]=${MW_AUTO_PATHS[$mw_i]}
+    MW_SELECTED_HOSTS[${#MW_SELECTED_HOSTS[@]}]=${MW_AUTO_HOSTS[$mw_i]}
+    MW_SELECTED_SHARES[${#MW_SELECTED_SHARES[@]}]=${MW_AUTO_SHARES[$mw_i]}
     mw_i=$((mw_i + 1))
   done
-  [ "$mw_found" -ge 0 ] || mw_die "no supported auto_smb mapping for /Users/$mw_local_user/$mw_name"
-  MW_SELECTED_NAMES[${#MW_SELECTED_NAMES[@]}]=${MW_AUTO_NAMES[$mw_found]}
-  MW_SELECTED_PATHS[${#MW_SELECTED_PATHS[@]}]=${MW_AUTO_PATHS[$mw_found]}
-  MW_SELECTED_HOSTS[${#MW_SELECTED_HOSTS[@]}]=${MW_AUTO_HOSTS[$mw_found]}
-  MW_SELECTED_SHARES[${#MW_SELECTED_SHARES[@]}]=${MW_AUTO_SHARES[$mw_found]}
-done
+else
+  for mw_name in "${MW_REQUESTED[@]}"; do
+    mw_found=-1
+    mw_i=0
+    while [ "$mw_i" -lt "${#MW_AUTO_NAMES[@]}" ]; do
+      [ "${MW_AUTO_NAMES[$mw_i]}" = "$mw_name" ] && mw_found=$mw_i
+      mw_i=$((mw_i + 1))
+    done
+    [ "$mw_found" -ge 0 ] || mw_die "no supported auto_smb mapping for /Users/$mw_local_user/$mw_name"
+    MW_SELECTED_NAMES[${#MW_SELECTED_NAMES[@]}]=${MW_AUTO_NAMES[$mw_found]}
+    MW_SELECTED_PATHS[${#MW_SELECTED_PATHS[@]}]=${MW_AUTO_PATHS[$mw_found]}
+    MW_SELECTED_HOSTS[${#MW_SELECTED_HOSTS[@]}]=${MW_AUTO_HOSTS[$mw_found]}
+    MW_SELECTED_SHARES[${#MW_SELECTED_SHARES[@]}]=${MW_AUTO_SHARES[$mw_found]}
+  done
+fi
 mw_validate_auto_master_selected_paths "${MW_SELECTED_PATHS[@]}" || exit 1
 if [ -n "$mw_fstab" ] && { [ -e "$mw_fstab" ] || [ -L "$mw_fstab" ]; }; then
   mw_validate_fstab_selected_paths "$mw_fstab" "${MW_SELECTED_PATHS[@]}" || exit 1
@@ -681,67 +701,23 @@ mw_launchctl_job_state() {
 }
 
 mw_validate_loaded_job_identity() {
-  mw_identity_label=$1
-  mw_identity_path=$2
-  mw_identity_program=$3
-  mw_identity_argc=$4
-  mw_identity_arg0=$5
-  mw_identity_arg1=${6:-}
+  local mw_identity_label=$1 mw_identity_path=$2 mw_identity_program=$3
+  local mw_identity_argc=$4 mw_identity_arg0=$5 mw_identity_arg1=${6:-}
+  local mw_identity_output mw_test_program=/bin/bash
   if [ -n "$mw_root" ]; then
+    # Synthetic command output goes through the same parser as live output.
     case "${MOUNTWATCHDOG_TEST_LOADED_IDENTITY_MISMATCH:-}" in
-      '') return 0 ;;
-      canonical) return 1 ;;
-      *) return 1 ;;
+      '') ;;
+      *) mw_test_program=/bin/false ;;
     esac
+    mw_identity_output=$(printf 'path = %s\nprogram = %s\narguments = {\n/bin/bash\n%s/watchdog.sh\n}\n' \
+      "$MW_PLIST" "$mw_test_program" "$MW_APP")
+  else
+    mw_identity_output=$(/bin/launchctl print "system/$mw_identity_label" 2>/dev/null) || return 1
   fi
-  mw_identity_output=$(/bin/launchctl print "system/$mw_identity_label" 2>/dev/null) || return 1
-  printf '%s\n' "$mw_identity_output" | /usr/bin/awk \
-    -v expected_path="$mw_identity_path" \
-    -v expected_program="$mw_identity_program" \
-    -v expected_argc="$mw_identity_argc" \
-    -v expected_arg0="$mw_identity_arg0" \
-    -v expected_arg1="$mw_identity_arg1" '
-      function trim(value) {
-        sub(/^[[:space:]]+/, "", value)
-        sub(/[[:space:]]+$/, "", value)
-        return value
-      }
-      {
-        line = trim($0)
-        if (in_arguments) {
-          if (line == "}") {
-            in_arguments = 0
-            next
-          }
-          if (line != "") {
-            arguments[argument_count] = line
-            argument_count++
-          }
-          next
-        }
-        if (line == "arguments = {") {
-          arguments_seen++
-          in_arguments = 1
-          next
-        }
-        if (index(line, "path = ") == 1) {
-          path_seen++
-          actual_path = substr(line, 8)
-          next
-        }
-        if (index(line, "program = ") == 1) {
-          program_seen++
-          actual_program = substr(line, 11)
-        }
-      }
-      END {
-        valid = path_seen == 1 && program_seen == 1 && arguments_seen == 1 && !in_arguments
-        valid = valid && actual_path == expected_path && actual_program == expected_program
-        valid = valid && argument_count == expected_argc && arguments[0] == expected_arg0
-        if (expected_argc == 2) valid = valid && arguments[1] == expected_arg1
-        exit valid ? 0 : 1
-      }
-    '
+  printf '%s\n' "$mw_identity_output" | \
+    mw_launchctl_job_identity_matches "$mw_identity_path" "$mw_identity_program" \
+      "$mw_identity_argc" "$mw_identity_arg0" "$mw_identity_arg1"
 }
 
 mw_prior_state=$(mw_launchctl_job_state "$MW_LABEL" canonical-initial)

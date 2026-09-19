@@ -73,6 +73,62 @@ mw_launchctl_label_is_disabled() {
   '
 }
 
+# Parse only supplied launchctl output; never calls launchctl or prints raw data.
+# The first AWK array index must be numeric zero, not the uninitialized empty key.
+mw_launchctl_job_identity_matches() {
+  local mw_identity_path=$1 mw_identity_program=$2 mw_identity_argc=$3
+  local mw_identity_arg0=$4 mw_identity_arg1=${5:-}
+  case "$mw_identity_argc" in 1|2) ;; *) return 1 ;; esac
+  /usr/bin/awk \
+    -v expected_path="$mw_identity_path" \
+    -v expected_program="$mw_identity_program" \
+    -v expected_argc="$mw_identity_argc" \
+    -v expected_arg0="$mw_identity_arg0" \
+    -v expected_arg1="$mw_identity_arg1" '
+      BEGIN { argument_count = 0 }
+      function trim(value) {
+        sub(/^[[:space:]]+/, "", value)
+        sub(/[[:space:]]+$/, "", value)
+        return value
+      }
+      {
+        line = trim($0)
+        if (in_arguments) {
+          if (line == "}") {
+            in_arguments = 0
+            next
+          }
+          if (line != "") {
+            arguments[argument_count] = line
+            argument_count++
+          }
+          next
+        }
+        if (line == "arguments = {") {
+          arguments_seen++
+          in_arguments = 1
+          next
+        }
+        if (index(line, "path = ") == 1) {
+          path_seen++
+          actual_path = substr(line, 8)
+          next
+        }
+        if (index(line, "program = ") == 1) {
+          program_seen++
+          actual_program = substr(line, 11)
+        }
+      }
+      END {
+        valid = path_seen == 1 && program_seen == 1 && arguments_seen == 1 && !in_arguments
+        valid = valid && actual_path == expected_path && actual_program == expected_program
+        valid = valid && argument_count == expected_argc && arguments[0] == expected_arg0
+        if (expected_argc == 2) valid = valid && arguments[1] == expected_arg1
+        exit valid ? 0 : 1
+      }
+    '
+}
+
 mw_is_uint() {
   case "${1:-}" in
     ''|*[!0-9]*) return 1 ;;
